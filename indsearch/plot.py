@@ -36,7 +36,7 @@ def plot_dm_time(dm_time_plane, dm_const, dm_step_numb, dm_step=0.004):
         aspect="auto",
         origin="lower",
         extent=[0, n_time - 1, dm_min, dm_max],
-        cmap="viridis",
+        cmap="Grays",
         interpolation="nearest",
     )
     ax0.set_xlabel("Time sample")
@@ -55,4 +55,15 @@ def plot_dm_time(dm_time_plane, dm_const, dm_step_numb, dm_step=0.004):
     ax1.set_title(f"Time series at peak DM = {peak_dm_val:.4f} pc/cm\u00b3")
 
     plt.tight_layout()
+    plt.savefig("dm_time_plane.png", dpi=300)
     plt.show()
+
+if __name__ == "__main__":
+    
+    output_path = "data/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt"
+    
+    with open(output_path, "rb") as fout:
+        fout.seek(2 * 4)  # Skip the first 2 int32 values (header)
+        dm_time_plane = np.fromfile(fout, dtype="<f4").reshape((51, 65536))
+    
+    plot_dm_time(dm_time_plane, 12.8579, dm_step_numb=50, dm_step=0.004)

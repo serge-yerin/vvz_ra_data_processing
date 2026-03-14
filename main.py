@@ -7,6 +7,7 @@ Translated from IDL (IndSearch.pro) to Python.
 Usage
 -----
     python main.py <file.ucd> <DM>  [--no-plot]
+    python main.py "data/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" "12.8579"
 
 Arguments
 ---------
@@ -43,24 +44,24 @@ def main():
 
     # Replicate IDL print statements
     print(
-        f"File name: {params['sname']}"
-        f"   Local time: {params['stime']}"
-        f"   UTC time: {params['sgmtt']}"
-        f"   Record: {params['ssysn']}"
-        f"   Place: {params['splace']}"
-        f"   Descriptor: {params['sdesc']}"
+        f"\n   File name:  {params['sname']} \n"
+        f"   Local time: {params['stime']}  \n"
+        f"   UTC time:   {params['sgmtt']} \n"
+        f"   Record:     {params['ssysn']} \n"
+        f"   Place:      {params['splace']} \n"
+        f"   Descriptor: {params['sdesc']} \n"
     )
     # IDL: print, HStr.Sdspp[6:32]  — IDL slices are inclusive, so elements 6..32
     print(params["sdspp"][6:33])
 
     print(
-        f"Fmin={params['fmin']:.4f} MHz"
-        f"  Fmax={params['fmax']:.4f} MHz"
-        f"  Channels={params['wofsg']}"
-        f"  Spectra/frame={params['nofs']}"
-        f"  Averages={params['avrs']}"
-        f"  TimeRes={params['time_res']:.6e} s"
-        f"  Frames={params['n_kadr']}"
+        f"  Fmin =           {params['fmin']:.4f} MHz \n"
+        f"  Fmax =           {params['fmax']:.4f} MHz \n"
+        f"  Channels =       {params['wofsg']} \n"
+        f"  Spectra/frame =  {params['nofs']} \n"
+        f"  Averages =       {params['avrs']} \n"
+        f"  TimeRes =        {params['time_res']:.6e} s \n"
+        f"  Frames =         {params['n_kadr']} \n"
     )
 
     # --- Run the DM search ---
