@@ -8,6 +8,7 @@ Usage
 -----
     python main.py <file.ucd> <DM>  [--no-plot]
     python main.py "data/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" "12.8579"
+    python main.py "data/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.88
 
 Arguments
 ---------
@@ -82,6 +83,7 @@ def main():
         # element [dm, t] at byte offset dm + t*(dm_step_numb+1) within the block.
         # Transposing and then writing C-order reproduces that byte layout.
         out_slice.T.astype("<f4").tofile(fout)
+        # out_slice.astype("<f4").tofile(fout)
 
     print(f"\nOutput written to: {output_path}")
 
