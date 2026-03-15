@@ -83,7 +83,6 @@ def main():
         # element [dm, t] at byte offset dm + t*(dm_step_numb+1) within the block.
         # Transposing and then writing C-order reproduces that byte layout.
         out_slice.T.astype("<f4").tofile(fout)
-        # out_slice.astype("<f4").tofile(fout)
 
     print(f"\nOutput written to: {output_path}")
 

@@ -61,11 +61,13 @@ def plot_dm_time(dm_time_plane, dm_const, dm_step_numb, dm_step=0.004):
 
 if __name__ == "__main__":
     
-    output_path = "data/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt"
-    # output_path = "../../../Survey_Processing/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt"
+    # output_path = "data/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt"
+    # output_path = "data//Cleaned_ PSRB0834p06A141010_032001.jds DM=12.872.ucd.dmt"
+    output_path = "../../../Survey_Processing/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt"
+    
     
     with open(output_path, "rb") as fout:
         fout.seek(2 * 4)  # Skip the first 2 int32 values (header)
-        dm_time_plane = np.fromfile(fout, dtype="<f4").reshape((51, 65536))
+        dm_time_plane = np.fromfile(fout, dtype="<f4").T.reshape((51, 65536), order='F')
     
-    plot_dm_time(dm_time_plane.T, 12.8579, dm_step_numb=50, dm_step=0.004)
+    plot_dm_time(dm_time_plane, 12.872, dm_step_numb=50, dm_step=0.004)
