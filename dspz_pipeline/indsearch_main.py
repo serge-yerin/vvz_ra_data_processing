@@ -6,8 +6,8 @@ Translated from IDL (IndSearch.pro) to Python.
 
 Usage
 -----
-    python main.py <file.ucd> <DM>  [--no-plot]
-    python main.py "data/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" "12.8579"
+    python -m dspz_pipeline.indsearch_main <file.ucd> <DM>  [--no-plot]
+    dspz-indsearch "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.88
 
 Arguments
 ---------
