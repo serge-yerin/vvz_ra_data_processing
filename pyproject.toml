@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dspz-pipeline"
+version = "1.0.0"
+description = "Python pipeline for processing DSPZ low-frequency radio astronomy data (.jds files) — pulsar and transient search"
+readme = "README.md"
+requires-python = ">=3.12"
+license = {text = "MIT"}
+dependencies = [
+    "numpy>=1.26.0",
+    "matplotlib>=3.8.0",
+]
+
+[project.scripts]
+# Stage 1: .jds → .ucd → .dmt (cleaning + dedispersion + GUI)
+dspz-process = "dspz_pipeline.process_survey:main"
+dspz-trans-search = "dspz_pipeline.gui.trans_search:main"
+dspz-show-pulse = "dspz_pipeline.gui.show_pulse:main"
+dspz-repeating = "dspz_pipeline.gui.repeating_analysis:main"
+# Stage 2: .ucd → .dmt (subband-based dedispersion search)
+dspz-indsearch = "dspz_pipeline.indsearch_main:main"
+
+[tool.setuptools.packages.find]
+include = ["dspz_pipeline*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP"]
+ignore = ["E501"]  # line length handled by formatter

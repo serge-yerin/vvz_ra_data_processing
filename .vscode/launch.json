@@ -1,0 +1,103 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Stage 1: Process Survey (full pipeline)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "dspz_pipeline.process_survey",
+            "args": [
+                "--files", "_data/A141010_032001.jds", "_data/A141010_032843.jds",
+                "--dm", "12.872",
+                "--label", "PSRB0834p06",
+                "--outdir", "_output"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Stage 1: Process Survey (no GUI)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "dspz_pipeline.process_survey",
+            "args": [
+                "--files", "_data/A141010_032001.jds", "_data/A141010_032843.jds",
+                "--dm", "12.872",
+                "--label", "PSRB0834p06",
+                "--outdir", "_output",
+                "--no-gui"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Stage 1: TransSearch GUI",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "dspz_pipeline.gui.trans_search",
+            "args": [
+                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt",
+                "12.872"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Stage 1: ShowPulse (standalone)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "dspz_pipeline.gui.show_pulse",
+            "args": [
+                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd",
+                "12.872",
+                "--ns", "32768"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Stage 1: Repeating Analysis (standalone)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "dspz_pipeline.gui.repeating_analysis",
+            "args": [
+                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt",
+                "12.872"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Stage 2: IndSearch",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "dspz_pipeline.indsearch_main",
+            "args": [
+                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd",
+                "12.872"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Stage 2: IndSearch (no plot)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "dspz_pipeline.indsearch_main",
+            "args": [
+                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd",
+                "12.872",
+                "--no-plot"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

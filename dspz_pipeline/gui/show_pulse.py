@@ -1,0 +1,331 @@
+"""
+Individual pulse viewer with interactive DM / time-shift / bandwidth adjustment.
+
+Translated from IDL ``showpulse.pro``.
+
+Displays:
+  - The cleaned spectrogram from the .ucd file around the selected time
+  - The pulse profile (sum across frequency) with sub-band breakdowns
+  - A spectrum of the pulse (S/N vs frequency)
+  - Interactive buttons for adjusting DM, time shift, and frequency resolution
+
+Usage::
+
+    python -m dspz_pipeline.gui.show_pulse <ucd_file> <dm> --ns 32768
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("TkAgg")
+
+import matplotlib.pyplot as plt
+import numpy as np
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+
+try:
+    import tkinter as tk
+    from tkinter import ttk
+except ImportError:
+    raise SystemExit("tkinter is required for the GUI.")
+
+from dspz_pipeline.config import HEADER_SIZE_BYTES
+from dspz_pipeline.io.dmt import compute_dm_delays
+from dspz_pipeline.cleaning.robust_stats import erov
+from dspz_pipeline.utils import smooth_edge
+
+
+class ShowPulseApp:
+    """Interactive individual pulse viewer.
+
+    Translates IDL ``ShowPulse`` procedure from showpulse.pro.
+    """
+
+    def __init__(
+        self,
+        filename: str,
+        dm_const: float,
+        dm_pos: int,
+        ns: int,
+        picsize: int,
+        smpar: int,
+        acc_dm_norm: np.ndarray | None = None,
+        dm_stepnumb: int = 51,
+    ):
+        # The filename from TransSearch points to the .dmt file;
+        # ShowPulse reads the .ucd file (strip .dmt extension)
+        self.dmt_filename = filename
+        ucd_name = filename
+        if ucd_name.endswith(".dmt"):
+            ucd_name = ucd_name[:-4]
+        self.ucd_filename = ucd_name
+        self.dm_const = dm_const
+        self.dm_pos = dm_pos
+        self.ns = ns
+        self.picsize = picsize
+        self.smpar = smpar
+        self.acc_dm_norm = acc_dm_norm
+        self.dm_stepnumb = dm_stepnumb
+
+        # Parameters from IDL showpulse.pro
+        self.time_res = 64 * 8192.0 / 66_000_000.0
+        self.wofsg = 4096
+        self.nsframe = 50
+        self.dm_step = 0.002
+        self.sh_t = 0          # time shift in samples
+        self.smfreq = 8        # frequency smoothing exponent
+
+        # Compute current DM
+        self.dm = dm_const + 0.04 * (dm_pos - 25)
+
+        # Load data from .ucd file
+        self._load_ucd_data()
+
+        # Build GUI
+        self.root = tk.Toplevel() if acc_dm_norm is not None else tk.Tk()
+        self.root.title("Individual Pulse Viewer")
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        self._build_controls()
+        self._build_canvas()
+        self._update_display()
+
+    def _load_ucd_data(self):
+        """Load a window of data from the .ucd file around self.ns."""
+        nsf = self.nsframe
+        max_nofs = 44000
+
+        # Clamp ns to valid range
+        if self.ns < 2 * nsf:
+            self.ns = 2 * nsf
+        if self.ns >= self.picsize - 2 * nsf - 1:
+            self.ns = self.picsize - 2 * nsf - 1
+
+        # Read a chunk from the .ucd file using file offset
+        offset_bytes = HEADER_SIZE_BYTES + 4 * self.wofsg * (self.ns - 2 * nsf)
+        n_time = min(max_nofs, self.picsize - (self.ns - 2 * nsf))
+
+        self.dat_ucd = np.memmap(
+            self.ucd_filename,
+            dtype=np.float32,
+            mode="r",
+            offset=offset_bytes,
+            shape=(n_time, self.wofsg),
+        ).T.copy()  # shape: (wofsg, n_time)
+
+    # ------------------------------------------------------------------ #
+    #  GUI
+    # ------------------------------------------------------------------ #
+
+    def _build_controls(self):
+        ctrl = ttk.Frame(self.root)
+        ctrl.pack(side=tk.TOP, fill=tk.X, padx=4, pady=4)
+
+        ttk.Button(ctrl, text="ESC", command=self._on_close).pack(side=tk.LEFT, padx=2)
+
+        ttk.Label(ctrl, text="  DM:").pack(side=tk.LEFT)
+        ttk.Button(ctrl, text="-", width=2, command=lambda: self._adj_dm(-1)).pack(side=tk.LEFT)
+        self.lbl_dm = ttk.Label(ctrl, text=f"{self.dm:.4f}", width=10)
+        self.lbl_dm.pack(side=tk.LEFT)
+        ttk.Button(ctrl, text="+", width=2, command=lambda: self._adj_dm(+1)).pack(side=tk.LEFT)
+
+        ttk.Label(ctrl, text="  Shift:").pack(side=tk.LEFT)
+        ttk.Button(ctrl, text="<", width=2, command=lambda: self._adj_shift(-1)).pack(side=tk.LEFT)
+        self.lbl_shift = ttk.Label(ctrl, text=str(self.sh_t), width=4)
+        self.lbl_shift.pack(side=tk.LEFT)
+        ttk.Button(ctrl, text=">", width=2, command=lambda: self._adj_shift(+1)).pack(side=tk.LEFT)
+
+        ttk.Label(ctrl, text="  Band (Narr/Wide):").pack(side=tk.LEFT)
+        ttk.Button(ctrl, text="Narr", command=lambda: self._adj_smfreq(+1)).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="Wide", command=lambda: self._adj_smfreq(-1)).pack(side=tk.LEFT, padx=2)
+        self.lbl_band = ttk.Label(ctrl, text="", width=12)
+        self.lbl_band.pack(side=tk.LEFT)
+
+    def _build_canvas(self):
+        self.fig = Figure(figsize=(11, 8), dpi=100)
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
+        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+    # ------------------------------------------------------------------ #
+    #  Display update
+    # ------------------------------------------------------------------ #
+
+    def _update_display(self):
+        """Recompute dedispersion and redraw all panels."""
+        self.fig.clear()
+
+        nsf = self.nsframe
+        wofsg = self.wofsg
+        nofch = 2 ** self.smfreq
+
+        # Compute dispersion delays for current DM
+        dt = compute_dm_delays(self.dm, 33.0, 16.5, wofsg, 16.5 / wofsg)
+
+        # Build the pulse array: shift each freq channel by the delay
+        pulse = np.zeros((wofsg, 2 * nsf + 1), dtype=np.float64)
+        for j in range(wofsg):
+            stsp = int(round(dt[j] / self.time_res)) + self.sh_t + nsf
+            stsp = max(0, min(stsp, self.dat_ucd.shape[1] - 2 * nsf - 1))
+            end = stsp + 2 * nsf + 1
+            if end <= self.dat_ucd.shape[1]:
+                pulse[j, :] = self.dat_ucd[j, stsp:end]
+
+        # --- Ax 1: Cleaned data overview --------------------------------- #
+        ax_data = self.fig.add_subplot(3, 2, (1, 2))
+        n_show = min(44000, self.dat_ucd.shape[1])
+        ax_data.imshow(
+            self.dat_ucd[:, :n_show],
+            aspect="auto", origin="lower", cmap="gray_r",
+            interpolation="nearest",
+        )
+        ax_data.set_title("Cleaned data (from .ucd)")
+        ax_data.set_xlabel("Time sample")
+        ax_data.set_ylabel("Freq channel")
+
+        # --- Ax 2: Spectrum of pulse (S/N vs frequency) ------------------- #
+        ax_spec = self.fig.add_subplot(3, 2, 3)
+        op_spec = np.sum(pulse[:, nsf - 10:nsf + 11], axis=1)
+        mt_spec, st_spec = erov(op_spec)
+        if st_spec == 0:
+            st_spec = 1.0
+        rebinned = np.mean(
+            ((op_spec - mt_spec) / st_spec).reshape(nofch, wofsg // nofch),
+            axis=1,
+        ) * np.sqrt(nofch / float(wofsg))
+        freq_axis = 16.5 + np.arange(nofch) / (nofch - 1.0) * 16.5
+        ax_spec.step(freq_axis, rebinned, where="mid")
+        ax_spec.set_xlim(16.5, 33.0)
+        ax_spec.set_xlabel("Frequency (MHz)")
+        ax_spec.set_ylabel("S/N")
+        ax_spec.set_title("Spectrum of pulse")
+
+        band_khz = 33000.0 * wofsg / float(nofch) / 8192.0
+        self.lbl_band.config(text=f"{band_khz:.1f} kHz")
+
+        # --- Ax 3: Pulse profile (smoothed, total) ----------------------- #
+        ax_prof = self.fig.add_subplot(3, 2, 4)
+        pulse_sm = pulse.copy()
+        for j in range(wofsg):
+            pulse_sm[j, :] = smooth_edge(pulse[j, :], self.smpar)
+        profile = np.sum(pulse_sm, axis=0)
+        bg_mean = np.mean(np.sum(pulse_sm[:, :31], axis=0))
+        bg_std = np.std(np.sum(pulse_sm[:, :31], axis=0))
+        if bg_std == 0:
+            bg_std = 1.0
+        profile_sn = (profile - bg_mean) / bg_std
+        ax_prof.plot(profile_sn)
+        ax_prof.set_xlabel("Time sample")
+        ax_prof.set_ylabel("S/N")
+        ax_prof.set_title(f"Pulse profile  DM={self.dm:.4f}")
+
+        # --- Ax 4: Pulse image -------------------------------------------- #
+        ax_img = self.fig.add_subplot(3, 2, 5)
+        ax_img.imshow(
+            pulse_sm,
+            aspect="auto", origin="lower", cmap="gray_r",
+            interpolation="nearest",
+        )
+        ax_img.set_xlabel("Time sample")
+        ax_img.set_ylabel("Freq channel")
+        ax_img.set_title("Dedispersed pulse")
+
+        # --- Ax 5: Sub-band profiles ------------------------------------- #
+        ax_sub = self.fig.add_subplot(3, 2, 6)
+        sub_ranges = [(0, 1024), (1024, 2048), (2048, 3072), (3072, 4096)]
+        freq_labels = ["16.50-20.63", "20.63-24.75", "24.75-28.88", "28.88-33.00"]
+        for (lo, hi), lbl in zip(sub_ranges, freq_labels):
+            hi = min(hi, wofsg)
+            sub = np.sum(pulse_sm[lo:hi, :], axis=0)
+            sub_bg_m = np.mean(np.sum(pulse_sm[lo:hi, :31], axis=0))
+            sub_bg_s = np.std(np.sum(pulse_sm[lo:hi, :31], axis=0))
+            if sub_bg_s == 0:
+                sub_bg_s = 1.0
+            ax_sub.plot((sub - sub_bg_m) / sub_bg_s, label=f"{lbl} MHz")
+        ax_sub.legend(fontsize=7)
+        ax_sub.set_xlabel("Time sample")
+        ax_sub.set_ylabel("S/N")
+        ax_sub.set_title("Sub-band profiles")
+
+        self.fig.tight_layout()
+        self.canvas.draw()
+
+    # ------------------------------------------------------------------ #
+    #  Control callbacks
+    # ------------------------------------------------------------------ #
+
+    def _adj_dm(self, direction):
+        self.dm += direction * self.dm_step
+        self.lbl_dm.config(text=f"{self.dm:.4f}")
+        self._update_display()
+
+    def _adj_shift(self, direction):
+        if -self.nsframe < self.sh_t + direction < self.nsframe:
+            self.sh_t += direction
+        self.lbl_shift.config(text=str(self.sh_t))
+        self._update_display()
+
+    def _adj_smfreq(self, direction):
+        self.smfreq = max(2, min(10, self.smfreq + direction))
+        self._update_display()
+
+    def _on_close(self):
+        self.root.destroy()
+
+    def run(self):
+        """Start the tkinter main loop (only when run standalone)."""
+        if isinstance(self.root, tk.Tk):
+            self.root.mainloop()
+
+
+def show_pulse_gui(
+    filename: str,
+    dm_const: float,
+    dm_pos: int,
+    ns: int,
+    picsize: int,
+    smpar: int,
+    acc_dm_norm: np.ndarray | None = None,
+    dm_stepnumb: int = 51,
+) -> None:
+    """Launch the individual pulse viewer."""
+    app = ShowPulseApp(
+        filename, dm_const, dm_pos, ns, picsize, smpar,
+        acc_dm_norm, dm_stepnumb,
+    )
+    if acc_dm_norm is None:
+        app.run()
+
+
+def main() -> None:
+    """CLI entry point for ``python -m dspz_pipeline.gui.show_pulse``."""
+    parser = argparse.ArgumentParser(description="Individual pulse viewer")
+    parser.add_argument("ucd_file", help="Path to the .ucd data file")
+    parser.add_argument("dm", type=float, help="Central DM in pc/cm^3")
+    parser.add_argument("--dm-pos", type=int, default=25, help="DM step index (default: 25)")
+    parser.add_argument("--ns", type=int, default=1000, help="Time sample to inspect (default: 1000)")
+    parser.add_argument("--picsize", type=int, default=None, help="Total time samples (auto-detected if omitted)")
+    parser.add_argument("--smpar", type=int, default=4, help="Smoothing parameter (default: 4)")
+    args = parser.parse_args()
+
+    # Auto-detect picsize from file
+    if args.picsize is None:
+        import os
+        fsize = os.path.getsize(args.ucd_file)
+        args.picsize = (fsize - HEADER_SIZE_BYTES) // (4 * 4096)
+
+    # For standalone run, create a fake .dmt filename so the .ucd path derivation works
+    fake_dmt = args.ucd_file + ".dmt"
+
+    app = ShowPulseApp(
+        fake_dmt, args.dm, args.dm_pos, args.ns, args.picsize, args.smpar,
+    )
+    app.run()
+
+
+if __name__ == "__main__":
+    main()

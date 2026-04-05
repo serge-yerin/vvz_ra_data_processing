@@ -1,12 +1,22 @@
 """
-Visualisation of the DM-time plane produced by IndSearch.
+Visualisation of the DM-time plane produced by IndSearch (Stage 2).
 """
+
+from __future__ import annotations
+
+from pathlib import Path
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-def plot_dm_time(dm_time_plane, dm_const, dm_step_numb, dm_step=0.004):
+def plot_dm_time(
+    dm_time_plane: np.ndarray,
+    dm_const: float,
+    dm_step_numb: int,
+    dm_step: float = 0.004,
+    output_dir: str | Path = "_output",
+) -> None:
     """
     Display the DM-time plane as a 2D intensity image plus a 1D time series
     at the DM index with the highest peak signal.
@@ -15,9 +25,14 @@ def plot_dm_time(dm_time_plane, dm_const, dm_step_numb, dm_step=0.004):
     ----------
     dm_time_plane : ndarray, shape (dm_step_numb+1, n_time)
         Dedispersed, DM-summed data as written to the .dmt file.
-    dm_const      : float  Central DM [pc/cm^3]
-    dm_step_numb  : int    Number of DM steps (DM_STEP_NUMB constant)
-    dm_step       : float  DM step size [pc/cm^3]
+    dm_const : float
+        Central DM [pc/cm^3].
+    dm_step_numb : int
+        Number of DM steps.
+    dm_step : float
+        DM step size [pc/cm^3].
+    output_dir : str or Path
+        Directory where the plot image is saved.
     """
     n_dm, n_time = dm_time_plane.shape
     dm_min = dm_const - (dm_step_numb // 2) * dm_step
@@ -55,15 +70,12 @@ def plot_dm_time(dm_time_plane, dm_const, dm_step_numb, dm_step=0.004):
     ax1.set_title(f"Time series at peak DM = {peak_dm_val:.4f} pc/cm\u00b3")
 
     plt.tight_layout()
-    plt.savefig("dm_time_plane.png", dpi=300)
-    plt.show()
 
-if __name__ == "__main__":
-    
-    output_path = "data/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt"
-    
-    with open(output_path, "rb") as fout:
-        fout.seek(2 * 4)  # Skip the first 2 int32 values (header)
-        dm_time_plane = np.fromfile(fout, dtype="<f4").reshape((51, 65536))
-    
-    plot_dm_time(dm_time_plane, 12.8579, dm_step_numb=50, dm_step=0.004)
+    # Save to output directory
+    out_path = Path(output_dir)
+    out_path.mkdir(parents=True, exist_ok=True)
+    save_path = out_path / "dm_time_plane.png"
+    plt.savefig(save_path, dpi=300)
+    print(f"Plot saved to: {save_path}")
+
+    plt.show()
