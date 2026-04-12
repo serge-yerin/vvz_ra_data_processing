@@ -1,14 +1,8 @@
 # DSPZ Pipeline
 
-A Python pipeline for processing low-frequency radio astronomy data from DSPZ
-receivers (0-40 MHz range). It reads raw `.jds` binary data files, removes
-radio frequency interference (RFI), performs incoherent dedispersion to search
-for pulsar and transient signals, and provides interactive visualization tools
-for inspecting the results.
+A Python pipeline for processing low-frequency radio astronomy data from DSPZ receivers (0-40 MHz range) to search for pulsar and transient signals. It reads raw `.jds` binary data files, removes radio frequency interference (RFI), performs incoherent dedispersion to search for pulsar and transient signals, and provides interactive visualization tools for inspecting the results.
 
-This is a direct translation of the original IDL codebase written for the
-DSPZ (Digital Spectro-Polarimeter "Z") instrument used at the UTR-2 radio
-telescope and similar low-frequency arrays.
+This is a direct translation of the original IDL codebase written by Dr. Vyacheslav Zakharenko for the DSPZ (Digital Spectro-Polarimeter "Z") instrument used at the UTR-2 radio telescope and URAN VLBI system.
 
 ## Data Processing Pipeline
 
