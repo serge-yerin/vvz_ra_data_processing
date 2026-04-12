@@ -43,14 +43,15 @@ def plot_dm_time(
     dm_min = dm_const - (n_dm // 2) * dm_step
     dm_max = dm_min + (n_dm - 1) * dm_step
 
-    fig, axes = plt.subplots(
-        2, 1,
-        figsize=(11, 5.5),
-        gridspec_kw={"height_ratios": [3, 1]},
-    )
+    # 16:9 canvas; GridSpec with a narrow colorbar column only in the top row
+    fig = plt.figure(figsize=(16, 9))
+    gs = fig.add_gridspec(2, 2, width_ratios=[50, 1], height_ratios=[3, 1])
+
+    ax0 = fig.add_subplot(gs[0, 0])
+    cax = fig.add_subplot(gs[0, 1])
+    ax1 = fig.add_subplot(gs[1, 0], sharex=ax0)
 
     # --- DM-time image ---
-    ax0 = axes[0]
     im = ax0.imshow(
         dm_time_plane,
         aspect="auto",
@@ -59,22 +60,25 @@ def plot_dm_time(
         cmap="Greys",
         interpolation="nearest",
     )
-    ax0.set_xlabel("Time sample")
     ax0.set_ylabel("DM [pc/cm\u00b3]")
     ax0.set_title("DM\u2013Time plane (IndSearch output)")
-    plt.colorbar(im, ax=ax0, label="Intensity")
+    ax0.tick_params(labelbottom=False)   # x labels shown by ax1 below
+
+    # --- Colorbar: tight against ax0, title above, small tick labels ---
+    cbar = fig.colorbar(im, cax=cax)
+    cbar.ax.tick_params(labelsize=7)
+    cax.set_title("Intensity", fontsize=8, pad=3)
 
     # --- Time series at peak DM ---
     peak_dm_idx = int(dm_time_plane.max(axis=1).argmax())
     peak_dm_val = dm_min + peak_dm_idx * dm_step
 
-    ax1 = axes[1]
     ax1.plot(dm_time_plane[peak_dm_idx, :], linewidth=0.6, color="steelblue")
-    ax1.set_xlabel("Time sample")
+    ax1.set_xlim(0, n_time - 1)
+    ax1.set_xlabel(f"Time sample\nTime series at peak DM = {peak_dm_val:.4f} pc/cm\u00b3")
     ax1.set_ylabel("Intensity")
-    ax1.set_title(f"Time series at peak DM = {peak_dm_val:.4f} pc/cm\u00b3")
 
-    plt.tight_layout()
+    fig.subplots_adjust(left=0.06, right=0.97, top=0.93, bottom=0.10, hspace=0, wspace=0)
 
     if save_path is not None:
         plt.savefig(save_path, dpi=300)
