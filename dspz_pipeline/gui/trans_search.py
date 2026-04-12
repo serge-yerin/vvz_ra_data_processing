@@ -117,7 +117,7 @@ class TransSearchApp:
         r1 = ttk.Frame(ctrl)
         r1.pack(fill=tk.X, pady=2)
 
-        ttk.Button(r1, text="ESC / Close", command=self._on_close).pack(side=tk.LEFT, padx=4)
+        ttk.Button(r1, text="Close", command=self._on_close).pack(side=tk.LEFT, padx=4)
 
         ttk.Label(r1, text="  smpar:").pack(side=tk.LEFT)
         ttk.Button(r1, text="<", width=2, command=lambda: self._adj_smpar(-1)).pack(side=tk.LEFT)
@@ -141,9 +141,9 @@ class TransSearchApp:
         r2 = ttk.Frame(ctrl)
         r2.pack(fill=tk.X, pady=2)
 
-        self.btn_ind = ttk.Button(r2, text="IND", command=self._toggle_ind)
+        self.btn_ind = ttk.Button(r2, text="Individual", command=self._toggle_ind)
         self.btn_ind.pack(side=tk.LEFT, padx=4)
-        self.btn_rep = ttk.Button(r2, text="REP", command=self._toggle_rep)
+        self.btn_rep = ttk.Button(r2, text="Repetitive", command=self._toggle_rep)
         self.btn_rep.pack(side=tk.LEFT, padx=4)
 
         ttk.Label(r2, text="  parts:").pack(side=tk.LEFT)
