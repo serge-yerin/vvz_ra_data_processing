@@ -137,37 +137,33 @@ class TransSearchApp:
         self.lbl_dm.pack(side=tk.LEFT)
         ttk.Button(r1, text=">", width=2, command=lambda: self._adj_dm(+1)).pack(side=tk.LEFT)
 
-        # Row 2: toggles and part selection
-        r2 = ttk.Frame(ctrl)
-        r2.pack(fill=tk.X, pady=2)
-
-        self.btn_ind = ttk.Button(r2, text="Individual", command=self._toggle_ind)
+        self.btn_ind = ttk.Button(r1, text="Individual", width=14, command=self._toggle_ind)
         self.btn_ind.pack(side=tk.LEFT, padx=4)
-        self.btn_rep = ttk.Button(r2, text="Repetitive", command=self._toggle_rep)
+        self.btn_rep = ttk.Button(r1, text="Repetitive", width=14, command=self._toggle_rep)
         self.btn_rep.pack(side=tk.LEFT, padx=4)
 
-        ttk.Label(r2, text="  parts:").pack(side=tk.LEFT)
-        ttk.Button(r2, text="<", width=2, command=lambda: self._adj_nofp(-1)).pack(side=tk.LEFT)
-        self.lbl_nofp = ttk.Label(r2, text=str(self.nofp), width=3)
+        ttk.Label(r1, text="  parts:").pack(side=tk.LEFT)
+        ttk.Button(r1, text="<", width=2, command=lambda: self._adj_nofp(-1)).pack(side=tk.LEFT)
+        self.lbl_nofp = ttk.Label(r1, text=str(self.nofp), width=3)
         self.lbl_nofp.pack(side=tk.LEFT)
-        ttk.Button(r2, text=">", width=2, command=lambda: self._adj_nofp(+1)).pack(side=tk.LEFT)
+        ttk.Button(r1, text=">", width=2, command=lambda: self._adj_nofp(+1)).pack(side=tk.LEFT)
 
-        ttk.Label(r2, text="  N of parts:").pack(side=tk.LEFT)
-        ttk.Button(r2, text="<", width=2, command=lambda: self._adj_pnum(-1)).pack(side=tk.LEFT)
-        self.lbl_pnum = ttk.Label(r2, text=str(self.p_num), width=3)
+        ttk.Label(r1, text="  N of parts:").pack(side=tk.LEFT)
+        ttk.Button(r1, text="<", width=2, command=lambda: self._adj_pnum(-1)).pack(side=tk.LEFT)
+        self.lbl_pnum = ttk.Label(r1, text=str(self.p_num), width=3)
         self.lbl_pnum.pack(side=tk.LEFT)
-        ttk.Button(r2, text=">", width=2, command=lambda: self._adj_pnum(+1)).pack(side=tk.LEFT)
+        ttk.Button(r1, text=">", width=2, command=lambda: self._adj_pnum(+1)).pack(side=tk.LEFT)
 
-        # Row 3: scale sliders
-        r3 = ttk.Frame(ctrl)
-        r3.pack(fill=tk.X, pady=2)
-        ttk.Label(r3, text="Min scale:").pack(side=tk.LEFT)
-        self.scl_min = tk.Scale(r3, from_=-50, to=50, resolution=0.1,
+        # Row 2: scale sliders
+        r2 = ttk.Frame(ctrl)
+        r2.pack(fill=tk.X, pady=2)
+        ttk.Label(r2, text="Min scale:").pack(side=tk.LEFT)
+        self.scl_min = tk.Scale(r2, from_=-50, to=50, resolution=0.1,
                                 orient=tk.HORIZONTAL, length=200,
                                 command=self._on_scale_change)
         self.scl_min.pack(side=tk.LEFT, padx=4)
-        ttk.Label(r3, text="Max scale:").pack(side=tk.LEFT)
-        self.scl_max = tk.Scale(r3, from_=-50, to=50, resolution=0.1,
+        ttk.Label(r2, text="Max scale:").pack(side=tk.LEFT)
+        self.scl_max = tk.Scale(r2, from_=-50, to=50, resolution=0.1,
                                 orient=tk.HORIZONTAL, length=200,
                                 command=self._on_scale_change)
         self.scl_max.pack(side=tk.LEFT, padx=4)
@@ -315,12 +311,12 @@ class TransSearchApp:
 
     def _toggle_ind(self):
         self.ind_mode = not self.ind_mode
-        self.btn_ind.config(text=f"IND {'ON' if self.ind_mode else 'off'}")
+        self.btn_ind.config(text=f"Individual {'ON' if self.ind_mode else 'OFF'}")
         print(f"IND = {self.ind_mode}")
 
     def _toggle_rep(self):
         self.rep_mode = not self.rep_mode
-        self.btn_rep.config(text=f"REP {'ON' if self.rep_mode else 'off'}")
+        self.btn_rep.config(text=f"Repetitive {'ON' if self.rep_mode else 'OFF'}")
         print(f"REP = {self.rep_mode}")
 
     def _adj_nofp(self, delta):
