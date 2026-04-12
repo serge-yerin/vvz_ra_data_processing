@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-IndSearch — Incoherent pulsar dedispersion search for UTR-2 .ucd files.
+IndSearch — Incoherent pulsar dedispersion search of individual pulses for UTR-2 .ucd files.
 
 Translated from IDL (IndSearch.pro) to Python.
 
