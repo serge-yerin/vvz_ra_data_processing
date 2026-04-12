@@ -26,9 +26,9 @@ Thumbs.db
 .DS_Store
 
 # Data files (large binary, not for version control)
-_data/*.jds
-_data/*.ucd
-_data/*.dmt
+*.jds
+*.ucd
+*.dmt
 
 # Output directory (generated files)
 _output/
