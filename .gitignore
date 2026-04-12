@@ -29,6 +29,10 @@ Thumbs.db
 *.jds
 *.ucd
 *.dmt
+*.png
+*.jpg
+*.jpeg
+*.bmp
 
 # Output directory (generated files)
 _output/
