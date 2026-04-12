@@ -104,10 +104,10 @@ This installs the command-line entry points (`dspz-process`, `dspz-indsearch`, e
 ### Full pipeline (.jds to .ucd to .dmt)
 
 ```bash
-python -m dspz_pipeline.process_survey --files _data_0834/A141010_032001.jds _data_0834/A141010_032843.jds --dm 12.872 --label "B0834p06" --outdir _output_0834 --save_cleaning_mask
+python -m dspz_pipeline.process_survey --indir _data_0834 --files A141010_032001.jds A141010_032843.jds --dm 12.872 --label "B0834p06" --outdir _output_0834
 
 
-python -m dspz_pipeline.process_survey --files _data_1133/C231121_032738.jds _data_1133/C231121_033619.jds --dm 4.8471 --label "B1133p16" --outdir _output_1133 --save_cleaning_mask
+python -m dspz_pipeline.process_survey --indir _data_1133 --files C231121_032738.jds C231121_033619.jds --dm 4.8471 --label "B1133p16" --outdir _output_1133
 ```
 
 **What it does:**
@@ -191,7 +191,7 @@ To run both stages sequentially from raw data to final analysis:
 
 ```bash
 # Full pipeline: clean raw data and produce .ucd
-python -m dspz_pipeline.process_survey --files _data/A141010_032001.jds _data/A141010_032843.jds --dm 12.872 --label "PSRB0834p06" --outdir _output --no-gui
+python -m dspz_pipeline.process_survey --indir _data --files A141010_032001.jds A141010_032843.jds --dm 12.872 --label "PSRB0834p06" --outdir _output --no-gui
 
 # Individual Search run IndSearch dedispersion on the .ucd output
 python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.872
@@ -203,7 +203,8 @@ python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_0320
 
 | Argument    | Default         | Description                                    |
 |-------------|-----------------|------------------------------------------------|
-| `--files`   | (required)      | One or more `.jds` files to process            |
+| `--indir`   | `.`             | Directory containing the `.jds` input files    |
+| `--files`   | (required)      | One or more `.jds` file names (relative to `--indir`) |
 | `--outdir`  | `_output`       | Output directory                               |
 | `--dm`      | `12.872`        | Central dispersion measure (pc/cm^3)           |
 | `--period`  | `1.29224132384` | Pulsar period (seconds)                        |

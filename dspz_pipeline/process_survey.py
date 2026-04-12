@@ -91,8 +91,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="DSPZ pipeline: .jds \u2192 clean \u2192 .ucd \u2192 dedisperse \u2192 .dmt",
     )
     p.add_argument(
+        "--indir", default=".",
+        help="Directory containing the .jds input files (default: current directory).",
+    )
+    p.add_argument(
         "--files", nargs="+", required=True,
-        help="One or more .jds data files to process (in order).",
+        help="One or more .jds file names (relative to --indir) to process (in order).",
     )
     p.add_argument(
         "--outdir", default="_output",
@@ -134,7 +138,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
     outdir = Path(args.outdir)
     outdir.mkdir(parents=True, exist_ok=True)
 
-    jds_files = [Path(f) for f in args.files]
+    indir = Path(args.indir)
+    jds_files = [indir / f for f in args.files]
     shortnames = [f.name for f in jds_files]
     n_in_list = len(jds_files)
 
