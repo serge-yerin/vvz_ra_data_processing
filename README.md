@@ -104,10 +104,10 @@ This installs the command-line entry points (`dspz-process`, `dspz-indsearch`, e
 ### Full pipeline (.jds to .ucd to .dmt)
 
 ```bash
-python -m dspz_pipeline.process_survey --files _data/A141010_032001.jds _data/A141010_032843.jds --dm 12.872 --label "PSRB0834p06" --outdir _output
+python -m dspz_pipeline.process_survey --files _data_0834/A141010_032001.jds _data_0834/A141010_032843.jds --dm 12.872 --label "B0834p06" --outdir _output_0834 --save_cleaning_mask
 
 
-python -m dspz_pipeline.process_survey --files _data_1133/C231121_032738.jds _data_1133/C231121_033619.jds --dm 4.8471 --label "B1133p16" --outdir _output_1133
+python -m dspz_pipeline.process_survey --files _data_1133/C231121_032738.jds _data_1133/C231121_033619.jds --dm 4.8471 --label "B1133p16" --outdir _output_1133 --save_cleaning_mask
 ```
 
 **What it does:**
@@ -123,6 +123,8 @@ python -m dspz_pipeline.process_survey --files _data_1133/C231121_032738.jds _da
 plus ~10 minutes for dedispersion. Progress is printed to the console.
 
 Add `--no-gui` to skip the GUI and just produce the output files.
+
+Add `--save_cleaning_mask` to save a PNG image of the cleaned data and RFI mask for every frame. Images are stored in a subfolder next to the `.ucd` file, named after the `.ucd` file (without extension). Each PNG is named `<ucd_stem>_NNN.png` (zero-padded by total frame count) and shows the Data and Mask arrays side-by-side with a Greys colormap. By default this is off to avoid the extra I/O overhead during processing.
 
 If you have already have a .ucd file ready, you can just run...
 
@@ -209,6 +211,7 @@ python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_0320
 | `--mode`    | `1`             | Channel: 0 = ch0-ch1, 1 = ch0, 2 = ch1         |
 | `--nofs`    | `1024`          | Spectra per frame                              |
 | `--no-gui`  | (flag)          | Skip launching the interactive GUI             |
+| `--save_cleaning_mask` | (flag) | Save PNG images of cleaned data and RFI mask for each frame (see below) |
 
 ### indsearch_main (Individual Search)
 

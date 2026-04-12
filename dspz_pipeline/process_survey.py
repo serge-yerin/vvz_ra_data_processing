@@ -24,8 +24,9 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from pathlib import Path
+
+from tqdm import tqdm
 
 import numpy as np
 
@@ -37,9 +38,51 @@ from dspz_pipeline.config import (
     DEFAULT_PULSAR_LABEL,
     SHIFT_AB,
 )
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+
 from dspz_pipeline.analysis.dedispersion import ind_search
 from dspz_pipeline.io.jds_reader import JdsFile, write_ucd_header
 from dspz_pipeline.cleaning.rfi_cleaning import adr_cleaning
+
+
+def save_frame_png(imdat, mask, ucd_path: Path, frame_num: int, total_frames: int) -> None:
+    """Save imdat and mask side-by-side as a PNG next to the .ucd file.
+
+    Parameters
+    ----------
+    imdat : ndarray
+        Cleaned data array for this frame.
+    mask : ndarray
+        RFI mask array for this frame.
+    ucd_path : Path
+        Path to the output .ucd file (used to derive folder and filename).
+    frame_num : int
+        1-based frame number (i + 1).
+    total_frames : int
+        Total number of frames across all JDS files (for zero-padding and suptitle).
+    """
+    out_dir = ucd_path.parent / ucd_path.stem
+    out_dir.mkdir(exist_ok=True)
+
+    n_digits = len(str(total_frames))
+    fname = f"{ucd_path.stem}_{frame_num:0{n_digits}d}.png"
+
+    fig = Figure(figsize=(12, 5))
+    FigureCanvasAgg(fig)
+
+    fig.suptitle(f"{ucd_path.stem}  frame {frame_num} of {total_frames}", fontsize=10)
+
+    ax_data = fig.add_subplot(1, 2, 1)
+    ax_data.imshow(imdat, aspect="auto", cmap="Greys", origin="lower")
+    ax_data.set_title("Data")
+
+    ax_mask = fig.add_subplot(1, 2, 2)
+    ax_mask.imshow(mask, aspect="auto", cmap="Greys_r", origin="lower")
+    ax_mask.set_title("Mask")
+
+    fig.tight_layout()
+    fig.savefig(out_dir / fname, dpi=150)
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -79,6 +122,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--no-gui", action="store_true",
         help="Skip launching the interactive TransSearch GUI.",
     )
+    p.add_argument(
+        "--save_cleaning_mask", action="store_true",
+        help="Save PNG images of the cleaned data and RFI mask for each frame.",
+    )
     return p.parse_args(argv)
 
 
@@ -98,6 +145,16 @@ def run_pipeline(args: argparse.Namespace) -> None:
     with JdsFile(jds_files[0], nofs=args.nofs) as jds0:
         first_header = jds0.header
 
+    # Pre-compute total frame count across all JDS files (for PNG naming/padding)
+    if args.save_cleaning_mask:
+        print(f"\nImages of data and RFI mask will be saved for each frame. !!! This may take additional time !!!\n")
+        total_frames = 0
+        for jds_path in jds_files:
+            with JdsFile(jds_path, nofs=args.nofs) as jds:
+                total_frames += jds.nframe
+    else:
+        total_frames = 0
+
     # Construct output filename (matches IDL convention)
     cleaned_filename = outdir / f"Cleaned_ {args.label}{shortnames[0]}.ucd"
 
@@ -106,6 +163,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
     # Open .ucd for appending data after the header
     ucd_fh = open(cleaned_filename, "ab")
+    global_frame = 0
 
     try:
         for n_file in range(n_in_list):
@@ -118,23 +176,28 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 print(f"  Local: {hdr.stime}")
                 print(f"  UTC:   {hdr.sgmtt}")
                 print(f"  Mode:  {'waveform' if hdr.data_mode == 0 else 'spectra' if hdr.data_mode == 1 else 'correlation'}")
-                print(f"  Fmin: {hdr.fmin_mhz:.1f} MHz, Fmax: {hdr.fmax_mhz:.1f} MHz, "
-                      f"wofsg: {hdr.wofsg}, avrs: {hdr.avrs}, "
-                      f"TimeRes: {hdr.time_res_s * 1000:.3f} ms")
-                print(f"  Frames: {jds.nframe}")
+                print(f"  Fmin: {hdr.fmin_mhz:.1f} MHz,  Fmax: {hdr.fmax_mhz:.1f} MHz,  "
+                      f"wofsg: {hdr.wofsg},  avrs: {hdr.avrs},  "
+                      f"Time resolution: {hdr.time_res_s * 1000:.3f} ms")
+                print(f"  Total number of frames in file: {jds.nframe}")
 
-                tt = time.time()
-
-                for i, imdat in jds.frames(mode=args.mode):
+                pbar = tqdm(
+                    jds.frames(mode=args.mode),
+                    total=jds.nframe,
+                    desc=f"  File {n_file + 1} / {n_in_list}",
+                    unit="frame",
+                    dynamic_ncols=True,
+                )
+                for i, imdat in pbar:
                     # Clean the frame
                     imdat, mask = adr_cleaning(imdat, pat=True, nar=True, wid=True)
 
                     # Write cleaned data as float32 to .ucd
                     ucd_fh.write(imdat.astype(np.float32).tobytes(order="F"))
 
-                    elapsed = time.time() - tt
-                    print(f"  Frame {i + 1}/{jds.nframe}, Time = {elapsed:.2f}s")
-                    tt = time.time()
+                    global_frame += 1
+                    if args.save_cleaning_mask:
+                        save_frame_png(imdat, mask, cleaned_filename, global_frame, total_frames)
 
     finally:
         ucd_fh.close()
