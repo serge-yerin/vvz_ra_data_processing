@@ -280,7 +280,7 @@ class TransSearchApp:
             f"REP={'ON' if self.rep_mode else 'off'}",
             fontsize=9,
         )
-        self.fig.tight_layout(rect=[0, 0, 1, 0.97])
+        self.fig.subplots_adjust(hspace=0, top=0.96, bottom=0.03, left=0.05, right=0.98)
         self.canvas.draw()
 
     # ------------------------------------------------------------------ #
