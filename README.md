@@ -1,24 +1,33 @@
 # DSPZ Pipeline
 
-A Python pipeline for processing low-frequency radio astronomy data from DSPZ receivers (0-40 MHz range) to search for pulsar and transient signals. It reads raw `.jds` binary data files, removes radio frequency interference (RFI), performs incoherent dedispersion to search for pulsar and transient signals, and provides interactive visualization tools for inspecting the results.
+A Python code for processing low-frequency radio astronomy data from DSPZ receivers (0-40 MHz range) to search for pulsar and transient signals. It reads raw `.jds` binary data files, removes low-level radio frequency interference (RFI), performs incoherent dedispersion to search for pulsar and transient signals, and provides interactive visualization tools for inspecting the results.
 
 This is a direct translation of the original IDL codebase written by Dr. Vyacheslav Zakharenko for the DSPZ (Digital Spectro-Polarimeter "Z") instrument used at the UTR-2 radio telescope and URAN VLBI system.
 
+You can find more on the receivers in:
+
+
+[1]	V. Zakharenko et al., “Digital Receivers for Low-Frequency Radio Telescopes UTR-2, URAN, GURT,” J. Astron. Instrum., vol. 05, no. 04, p. 1641010, Dec. 2016, doi: 10.1142/S2251171716410105.
+
+
+[2]	V. B. Ryabov et al., “A low-noise, high-dynamic-range, digital receiver for radio astronomy applications: an efficient solution for observing radio-bursts from Jupiter, the Sun, pulsars, and other astrophysical plasmas below 30 MHz,” Astron. Astrophys., vol. 510, p. A16, Feb. 2010, doi: 10.1051/0004-6361/200913335.
+
+
 ## Data Processing Pipeline
 
-The pipeline has two stages that run sequentially:
+The code consists of full pipeline (`process_survey`) and a part that uses an intermeiate result of the full pipline (.ucd file):
 
 ```
-Stage 1                                    Stage 2
+Full pipeline                            
 .jds files --> RFI cleaning --> .ucd --> dedispersion search --> .dmt --> plot
 (raw data)                     (clean)  (IndSearch)             (DM-time plane)
 ```
 
-**Stage 1** (`process_survey`) reads raw `.jds` binary data, cleans RFI, and
+**Full pipeline** (`process_survey`) reads raw `.jds` binary data, cleans RFI, and
 writes cleaned spectrogram data to `.ucd` files. It also includes its own
 dedispersion step and interactive Tkinter GUIs for pulse inspection.
 
-**Stage 2** (`indsearch_main`) takes the `.ucd` files from Stage 1 and performs a
+**Individual Search** (`indsearch_main`) takes the `.ucd` files from Full pipeline and performs a
 subband-based incoherent dedispersion search over a grid of DM trial values,
 producing a `.dmt` file and an optional DM-time plane plot.
 
@@ -42,8 +51,8 @@ dspz_pipeline/                          # Python package
 │   └── rfi_cleaning.py                 # Full cleaning driver (adr_cleaning)
 │
 ├── analysis/                           # Dedispersion algorithms
-│   ├── dedispersion.py                 # Stage 1: per-channel shift-and-sum
-│   └── indsearch.py                    # Stage 2: subband-based search loop
+│   ├── dedispersion.py                 # Full pipeline: per-channel shift-and-sum
+│   └── indsearch.py                    # Individual Search: subband-based search loop
 │
 ├── gui/                                # Interactive visualization tools
 │   ├── trans_search.py                 # DM-vs-time spectrogram viewer (Tkinter)
@@ -51,8 +60,8 @@ dspz_pipeline/                          # Python package
 │   ├── repeating_analysis.py           # FFT periodicity analysis
 │   └── dm_time_plot.py                 # DM-time plane matplotlib plot
 │
-├── process_survey.py                   # Stage 1 entry point: .jds --> .ucd --> .dmt
-└── indsearch_main.py                   # Stage 2 entry point: .ucd --> .dmt
+├── process_survey.py                   # Full pipeline entry point: .jds --> .ucd --> .dmt
+└── indsearch_main.py                   # Individual Search entry point: .ucd --> .dmt
 
 _data/                                  # Sample .jds input files
 _output/                                # Generated output files (.ucd, .dmt, plots)
@@ -88,15 +97,17 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-This installs the command-line entry points (`dspz-process`, `dspz-indsearch`,
-etc.) so you can run them from anywhere.
+This installs the command-line entry points (`dspz-process`, `dspz-indsearch`, etc.) so you can run them from anywhere.
 
 ## How to Run
 
-### Stage 1: Full pipeline (.jds to .ucd to .dmt)
+### Full pipeline (.jds to .ucd to .dmt)
 
 ```bash
 python -m dspz_pipeline.process_survey --files _data/A141010_032001.jds _data/A141010_032843.jds --dm 12.872 --label "PSRB0834p06" --outdir _output
+
+
+python -m dspz_pipeline.process_survey --files _data_1133/C231121_032738.jds _data_1133/C231121_033619.jds --dm 4.8471 --label "B1133p16" --outdir _output_1133
 ```
 
 **What it does:**
@@ -113,26 +124,36 @@ plus ~10 minutes for dedispersion. Progress is printed to the console.
 
 Add `--no-gui` to skip the GUI and just produce the output files.
 
-### Stage 2: IndSearch dedispersion (.ucd to .dmt)
+If you have already have a .ucd file ready, you can just run...
+
+
+
+### Individual Search dedispersion (.ucd to .dmt)
 
 ```bash
 python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd"  12.872
+
+python -m dspz_pipeline.indsearch_main "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd"  4.8471
 ```
 
 **What it does:**
-- Reads the `.ucd` file produced by Stage 1
+- Reads the `.ucd` file produced by Full pipeline
 - Performs subband-based incoherent dedispersion over 51 DM trial values
   (8 subbands of 256 channels each)
 - Writes the DM-time plane to a `.dmt` file
 - Displays a DM-time plane plot saved to `_output/dm_time_plane.png`
   (skip with `--no-plot`)
 
-### Stage 1 interactive tools (on existing output files)
+### Full pipeline interactive tools (on existing output files)
 
-#### TransSearch GUI (DM-vs-time spectrogram viewer)
+#### TransientSearch GUI (DM-vs-time spectrogram viewer)
+
+If you already calculated .dmt by the Full pipeline and want to start visual interactive analysis, you can run command:
 
 ```bash
 python -m dspz_pipeline.gui.trans_search "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt" 12.872
+
+python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd.dmt" 4.8471
 ```
 
 **Controls:**
@@ -145,7 +166,7 @@ python -m dspz_pipeline.gui.trans_search "_output/Cleaned_ PSRB0834p06A141010_03
 - **Min/Max scale sliders** -- adjust display contrast
 - **Click on spectrogram** -- select a time point for pulse inspection
 
-#### Individual pulse viewer
+#### Individual pulse viewer (we do not run it separately)
 
 ```bash
 python -m dspz_pipeline.gui.show_pulse "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.872 --ns 32768
@@ -156,7 +177,7 @@ python -m dspz_pipeline.gui.show_pulse "_output/Cleaned_ PSRB0834p06A141010_0320
 - **Shift < >** -- shift the dedispersion in time
 - **Narr / Wide** -- adjust frequency resolution for spectrum display
 
-#### Repeating pulse FFT analysis
+#### Repeating pulse FFT analysis  (we do not run it separately)
 
 ```bash
 python -m dspz_pipeline.gui.repeating_analysis "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt" 12.872
@@ -167,16 +188,16 @@ python -m dspz_pipeline.gui.repeating_analysis "_output/Cleaned_ PSRB0834p06A141
 To run both stages sequentially from raw data to final analysis:
 
 ```bash
-# Stage 1: clean raw data and produce .ucd
+# Full pipeline: clean raw data and produce .ucd
 python -m dspz_pipeline.process_survey --files _data/A141010_032001.jds _data/A141010_032843.jds --dm 12.872 --label "PSRB0834p06" --outdir _output --no-gui
 
-# Stage 2: run IndSearch dedispersion on the .ucd output
+# Individual Search run IndSearch dedispersion on the .ucd output
 python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.872
 ```
 
 ## Command-Line Arguments Reference
 
-### process_survey (Stage 1)
+### process_survey (Full pipeline)
 
 | Argument    | Default         | Description                                    |
 |-------------|-----------------|------------------------------------------------|
@@ -185,11 +206,11 @@ python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_0320
 | `--dm`      | `12.872`        | Central dispersion measure (pc/cm^3)           |
 | `--period`  | `1.29224132384` | Pulsar period (seconds)                        |
 | `--label`   | `PSRB0834p06`   | Source label for output filenames              |
-| `--mode`    | `1`             | Channel: 0 = ch0-ch1, 1 = ch0, 2 = ch1       |
+| `--mode`    | `1`             | Channel: 0 = ch0-ch1, 1 = ch0, 2 = ch1         |
 | `--nofs`    | `1024`          | Spectra per frame                              |
 | `--no-gui`  | (flag)          | Skip launching the interactive GUI             |
 
-### indsearch_main (Stage 2)
+### indsearch_main (Individual Search)
 
 | Argument    | Default    | Description                                    |
 |-------------|------------|------------------------------------------------|
@@ -232,7 +253,7 @@ The `.jds` format is used by the DSPZ digital receiver. Each file is typically
 
 ### .ucd (cleaned data)
 
-Intermediate file produced by Stage 1 after RFI cleaning.
+Intermediate file produced by Full pipeline after RFI cleaning.
 
 **Header (1024 bytes):** Identical structure to `.jds`, but `Sdspp[26]` is
 patched with the actual frame size used during processing.
@@ -242,7 +263,7 @@ of shape `(wofsg, nofs)` per write.
 
 ### .dmt (dedispersed DM-time plane)
 
-Output file from dedispersion (both Stage 1 and Stage 2).
+Output file from dedispersion (both Full pipeline and Individual Search).
 
 **Structure:**
 - Bytes 0-3: int32 -- number of DM steps (typically 51)
@@ -264,13 +285,13 @@ range from `dm_const - 25 * 0.004` to `dm_const + 25 * 0.004` pc/cm^3.
 
 The `.vscode/launch.json` file includes pre-configured debug configurations:
 
-1. **Stage 1: Process Survey (full pipeline)** -- runs the complete pipeline with GUI
-2. **Stage 1: Process Survey (no GUI)** -- runs the pipeline without the interactive GUI
-3. **Stage 1: TransSearch GUI** -- opens the interactive analysis on existing `.dmt` output
-4. **Stage 1: ShowPulse (standalone)** -- opens the pulse viewer on existing `.ucd` output
-5. **Stage 1: Repeating Analysis (standalone)** -- runs FFT analysis on existing `.dmt` output
-6. **Stage 2: IndSearch** -- runs subband dedispersion on existing `.ucd` output
-7. **Stage 2: IndSearch (no plot)** -- same as above, without the matplotlib figure
+1. **Full pipeline: Process Survey (full pipeline)** -- runs the complete pipeline with GUI
+2. **Full pipeline: Process Survey (no GUI)** -- runs the pipeline without the interactive GUI
+3. **Full pipeline: TransSearch GUI** -- opens the interactive analysis on existing `.dmt` output
+4. **Full pipeline: ShowPulse (standalone)** -- opens the pulse viewer on existing `.ucd` output
+5. **Full pipeline: Repeating Analysis (standalone)** -- runs FFT analysis on existing `.dmt` output
+6. **Individual Search: IndSearch** -- runs subband dedispersion on existing `.ucd` output
+7. **Individual Search: IndSearch (no plot)** -- same as above, without the matplotlib figure
 
 To use: open the Run and Debug panel (Ctrl+Shift+D), select a configuration
 from the dropdown, and press F5.
@@ -292,7 +313,7 @@ set PYTHONPATH=.
 
 ### "tkinter not found" or "No module named '_tkinter'"
 
-tkinter is required for the interactive GUIs (Stage 1 only). It is included
+tkinter is required for the interactive GUIs (Full pipeline only). It is included
 with most Python installations but may need to be installed separately:
 
 ```bash
@@ -307,23 +328,19 @@ brew install python-tk@3.12
 
 ### Processing is slow
 
-**Stage 1:** The RFI cleaning step processes ~6 seconds per frame. For two
+**Full pipeline:** The RFI cleaning step processes ~6 seconds per frame. For two
 2 GB files (128 frames), expect ~13 minutes for cleaning plus ~10 minutes
 for dedispersion.
 
-**Stage 2:** IndSearch processes 51 DM steps x 8 subbands, reading all frames
-for each combination. Runtime depends on file size and disk speed.
+**Individual Search:** IndSearch processes 51 DM steps (by default) x 8 subbands, reading all frames for each combination. Runtime depends on file size and disk speed.
 
 Both stages print progress to the console.
 
 ### Output files don't match the reference exactly
 
-Small numerical differences (< 1e-6 relative) are expected due to
-floating-point arithmetic differences between IDL and Python/numpy.
+Small numerical differences (< 1e-6 relative) are expected due to floating-point arithmetic differences between IDL and Python/numpy.
 The scientific results should be identical.
 
 ### "MemoryError" when processing large files
 
-The pipeline processes data frame by frame and should not require more
-than ~200 MB of RAM. If you encounter memory issues, ensure you are
-using a 64-bit Python installation.
+The pipeline processes data frame by frame and should not require more than ~200 MB of RAM. If you encounter memory issues, ensure you are using a 64-bit Python installation.
