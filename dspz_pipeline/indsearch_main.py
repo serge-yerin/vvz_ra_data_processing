@@ -20,6 +20,7 @@ Options
 """
 
 import argparse
+from pathlib import Path
 
 import numpy as np
 
@@ -78,7 +79,7 @@ def main():
     # --- Optional plot ---
     if not args.no_plot:
         from dspz_pipeline.gui.dm_time_plot import plot_dm_time
-        plot_dm_time(out_slice, args.dm, dm_step_numb)
+        plot_dm_time(out_slice, args.dm, save_path=Path(output_path).with_suffix(".png"))
 
 
 if __name__ == "__main__":

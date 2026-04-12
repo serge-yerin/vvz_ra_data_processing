@@ -133,18 +133,33 @@ If you have already have a .ucd file ready, you can just run...
 ### Individual Search dedispersion (.ucd to .dmt)
 
 ```bash
-python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd"  12.872
+python -m dspz_pipeline.indsearch_main "_output_0834/Cleaned_ PSRB0834p06A141010_032001.jds.ucd"  12.872
 
 python -m dspz_pipeline.indsearch_main "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd"  4.8471
 ```
 
 **What it does:**
+It makes a dedisperion of the data in a range of DM points and shows the full data on a plot where dynamic spectrum and integrated over frequency time profile of individual pulses is shown, step by step:
+
 - Reads the `.ucd` file produced by Full pipeline
-- Performs subband-based incoherent dedispersion over 51 DM trial values
-  (8 subbands of 256 channels each)
+- Performs subband-based incoherent dedispersion over 51 DM trial values  (8 subbands of 256 channels each)
 - Writes the DM-time plane to a `.dmt` file
-- Displays a DM-time plane plot saved to `_output/dm_time_plane.png`
-  (skip with `--no-plot`)
+- Saves a DM-time plane PNG next to the `.dmt` file with the same stem (skip with `--no-plot`)
+
+### DM-time plane viewer (standalone, on existing .dmt files)
+
+If you already have a `.dmt` file and want to (re-)plot it without rerunning dedispersion:
+
+```bash
+python -m dspz_pipeline.gui.dm_time_plot "_output_0834/Cleaned_ B0834p06A141010_032001.jds.ucd.dmt" 12.872
+
+python -m dspz_pipeline.gui.dm_time_plot "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd.dmt" 4.8471
+```
+
+**What it does:**
+- Reads the `.dmt` file from disk
+- Displays the DM-time plane image and peak-DM time series
+- Saves the PNG next to the `.dmt` file with the same name
 
 ### Full pipeline interactive tools (on existing output files)
 
@@ -221,6 +236,14 @@ python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_0320
 | `filename`  | (required) | Path to `.ucd` input file                      |
 | `dm`        | (required) | Central dispersion measure (pc/cm^3)           |
 | `--no-plot` | (flag)     | Skip the matplotlib output figure              |
+
+### dm_time_plot (standalone DM-time viewer)
+
+| Argument      | Default  | Description                                    |
+|---------------|----------|------------------------------------------------|
+| `dmt_file`    | (required) | Path to the `.dmt` file to plot              |
+| `dm`          | (required) | Central dispersion measure (pc/cm^3)         |
+| `--dm-step`   | `0.004`  | DM step size [pc/cm^3]                         |
 
 ## File Formats
 
