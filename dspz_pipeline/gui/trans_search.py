@@ -165,6 +165,8 @@ class TransSearchApp:
                                 command=self._on_scale_change)
         self.scl_max.pack(side=tk.LEFT, padx=4)
 
+        ttk.Button(r1, text="Save PNG", command=self._save_png).pack(side=tk.LEFT, padx=8)
+
     def _build_canvas(self):
         """Create the matplotlib canvas for the 16-strip spectrogram."""
         self.fig = Figure(figsize=(11, 9), dpi=100)
@@ -269,20 +271,36 @@ class TransSearchApp:
             if np_idx > 0:
                 ax.set_xticklabels([])
 
-        self.fig.suptitle(
-            f"smpar={self.smpar}  smpar_b={self.smpar_background}  "
-            f"DM step={self.dm_pos - 25:+d}  "
-            f"DM={self.dm_const + (self.dm_pos - 25) * 0.04:.3f}  "
-            f"IND={'ON' if self.ind_mode else 'off'}  "
-            f"REP={'ON' if self.rep_mode else 'off'}",
-            fontsize=9,
-        )
+        self.fig.suptitle(self._title_text(), fontsize=9)
         self.fig.subplots_adjust(hspace=0, top=0.96, bottom=0.03, left=0.05, right=0.98)
         self.canvas.draw()
 
     # ------------------------------------------------------------------ #
     #  Control callbacks
     # ------------------------------------------------------------------ #
+
+    def _title_text(self) -> str:
+        stem = Path(self.filename).stem
+        return (
+            f"{stem}  "
+            f"smpar={self.smpar}  smpar_b={self.smpar_background}  "
+            f"DM step={self.dm_pos - 25:+d}  "
+            f"DM={self.dm_const + (self.dm_pos - 25) * 0.04:.3f}  "
+            f"IND={'ON' if self.ind_mode else 'off'}  "
+            f"REP={'ON' if self.rep_mode else 'off'}"
+        )
+
+    def _save_png(self):
+        """Save the current canvas to a high-resolution PNG in the .dmt file's folder."""
+        import re
+        dmt_path = Path(self.filename)
+        title = self._title_text()
+        # Sanitize title for use in a filename (title already starts with the dmt stem)
+        safe_title = re.sub(r'[\\/:*?"<>|]', '', title)
+        safe_title = re.sub(r'\s+', '_', safe_title.strip())
+        out_path = dmt_path.parent / f"{safe_title}.png"
+        self.fig.savefig(out_path, dpi=200)
+        print(f"Saved: {out_path}")
 
     def _dm_label(self) -> str:
         sign = "+" if (self.dm_pos - 25) >= 0 else ""
