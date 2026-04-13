@@ -104,10 +104,10 @@ This installs the command-line entry points (`dspz-process`, `dspz-indsearch`, e
 ### Full pipeline (.jds to .ucd to .dmt)
 
 ```bash
-python -m dspz_pipeline.process_survey --indir _data_0834 --files A141010_032001.jds A141010_032843.jds --dm 12.872 --label "B0834p06" --outdir _output_0834
+python -m dspz_pipeline.process_survey --indir _data_0834 --files A141010_032001.jds A141010_032843.jds --dm 12.872 --label "B0834p06" --outdir _output_0834 --save_cleaning_mask
 
 
-python -m dspz_pipeline.process_survey --indir _data_1133 --files C231121_032738.jds C231121_033619.jds --dm 4.8471 --label "B1133p16" --outdir _output_1133
+python -m dspz_pipeline.process_survey --indir _data_1133 --files C231121_032738.jds C231121_033619.jds --dm 4.8471 --label "B1133p16" --outdir _output_1133 --save_cleaning_mask
 ```
 
 **What it does:**
