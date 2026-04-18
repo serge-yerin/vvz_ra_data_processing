@@ -1,6 +1,6 @@
 # DSPZ Pipeline
 
-A Python code for processing low-frequency radio astronomy data from DSPZ receivers (0-40 MHz range) to search for pulsar and transient signals. It reads raw `.jds` binary data files, removes low-level radio frequency interference (RFI), performs incoherent dedispersion to search for pulsar and transient signals, and provides interactive visualization tools for inspecting the results.
+A Python code for processing low-frequency radio astronomy data from DSPZ receivers (0-40 MHz range) to search for pulsar and transient signals. It reads `.jds` binary data files recorded in spectra mode, removes low-level radio frequency interference (RFI), performs incoherent dedispersion to search for pulsar and transient signals, and provides interactive visualization tools for inspecting the results.
 
 This is a direct translation of the original IDL codebase written by Dr. Vyacheslav Zakharenko for the DSPZ (Digital Spectro-Polarimeter "Z") instrument used at the UTR-2 radio telescope and URAN VLBI system.
 
@@ -14,6 +14,8 @@ You can find more on the receivers in:
 
 
 ## Data Processing Pipeline
+
+Usual input files are expected by the pipeline are 2 `.jds` consequtive files recoreded in spectra mode. The typical volume of single `.jds` file is 2 GB.
 
 The code consists of full pipeline (`process_survey`) and a part that uses an intermeiate result of the full pipline (.ucd file):
 
@@ -101,7 +103,7 @@ This installs the command-line entry points (`dspz-process`, `dspz-indsearch`, e
 
 ## How to Run
 
-### Full pipeline (.jds to .ucd to .dmt)
+### Full main pipeline 'Process survey' (.jds to .ucd to .dmt)
 
 ```bash
 python -m dspz_pipeline.process_survey --indir _data_0834 --files A141010_032001.jds A141010_032843.jds --dm 12.872 --label "B0834p06" --outdir _output_0834 --save_cleaning_mask
@@ -113,10 +115,10 @@ python -m dspz_pipeline.process_survey --indir _data_1133 --files C231121_032738
 **What it does:**
 - Reads each `.jds` file frame by frame
 - Decodes the DSPZ binary format
-- Cleans each frame (removes RFI)
-- Writes the cleaned data to `_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd`
+- Cleans (removes RFI) and normalizes response in each frame 
+- Writes the cleaned data to `_output_XXXX/Cleaned_XXXXXXXXXXXX.jds.ucd`
 - Runs incoherent dedispersion over 51 DM trial values
-- Writes dedispersed data to `_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt`
+- Writes dedispersed data to `_output_XXXX/Cleaned_XXXXXXXXXXXX.jds.ucd.dmt`
 - Launches the interactive TransSearch GUI
 
 **Expected runtime:** ~7 minutes per file (128 frames total for 2 files),
@@ -168,7 +170,7 @@ python -m dspz_pipeline.gui.dm_time_plot "_output_1133/Cleaned_ B1133p16C231121_
 If you already calculated .dmt by the Full pipeline and want to start visual interactive analysis, you can run command:
 
 ```bash
-python -m dspz_pipeline.gui.trans_search "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt" 12.872
+python -m dspz_pipeline.gui.trans_search "_output_0834/Cleaned_ B0834p06A141010_032001.jds.ucd.dmt" 12.872
 
 python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd.dmt" 4.8471
 ```
