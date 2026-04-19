@@ -1,4 +1,4 @@
-# DSPZ Pipeline
+# Pipeline for manual search of pursar and transient emission
 
 A Python code for processing low-frequency radio astronomy data from DSPZ receivers (0-40 MHz range) to search for pulsar and transient signals. It reads `.jds` binary data files recorded in spectra mode, removes low-level radio frequency interference (RFI), performs incoherent dedispersion to search for pulsar and transient signals, and provides interactive visualization tools for inspecting the results.
 
@@ -15,17 +15,17 @@ You can find more on the receivers in:
 
 ## Data Processing Pipeline
 
-Usual input files are expected by the pipeline are 2 `.jds` consequtive files recoreded in spectra mode. The typical volume of single `.jds` file is 2 GB.
-
-The code consists of full pipeline (`process_survey`) and a part that uses an intermeiate result of the full pipline (.ucd file):
+The code consists of Full main pipeline (`process_survey`) and a part that uses an intermeiate result of the full pipline (.ucd file):
 
 ```
-Full pipeline                            
-.jds files --> RFI cleaning --> .ucd --> dedispersion search --> .dmt --> plot
-(raw data)                     (clean)  (IndSearch)             (DM-time plane)
+(raw data)                            (clean & normalized)                      (DM-time plane)
+Full main pipeline                            
+`.jds` --> Normalizing-->  RFI cleaning --> `.ucd` --> Multiple DM Dedispersion --> `.dmt` --> Plot & GUI analysis
+Individual search branch                          |
+                                                   --> Individual Search
 ```
 
-**Full pipeline** (`process_survey`) reads raw `.jds` binary data, cleans RFI, and
+**Full pipeline** (`process_survey`) reads raw `.jds` binary data (typically 2 consequtive files of 2 GB each recorded in spectra mode), cleans RFI, and
 writes cleaned spectrogram data to `.ucd` files. It also includes its own
 dedispersion step and interactive Tkinter GUIs for pulse inspection.
 
@@ -74,14 +74,14 @@ validate.py                             # Utility to compare output against IDL 
 
 ## Installation
 
-### With uv (recommended)
+#### With uv (recommended)
 
 ```bash
 uv venv
 uv pip install -r requirements.txt
 ```
 
-### With pip
+#### With pip
 
 ```bash
 python3.12 -m venv .venv
@@ -93,7 +93,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### As an editable package (for development)
+#### As an editable package (for development)
 
 ```bash
 pip install -e .
@@ -116,10 +116,11 @@ python -m dspz_pipeline.process_survey --indir _data_1133 --files C231121_032738
 - Reads each `.jds` file frame by frame
 - Decodes the DSPZ binary format
 - Cleans (removes RFI) and normalizes response in each frame 
+- Saves images of masks and cleaned data if `--save_cleaning_mask` flag applied 
 - Writes the cleaned data to `_output_XXXX/Cleaned_XXXXXXXXXXXX.jds.ucd`
 - Runs incoherent dedispersion over 51 DM trial values
 - Writes dedispersed data to `_output_XXXX/Cleaned_XXXXXXXXXXXX.jds.ucd.dmt`
-- Launches the interactive TransSearch GUI
+- Launches the interactive Transient Search GUI to analyze dedispersed data array
 
 **Expected runtime:** ~7 minutes per file (128 frames total for 2 files),
 plus ~10 minutes for dedispersion. Progress is printed to the console.
@@ -128,14 +129,73 @@ Add `--no-gui` to skip the GUI and just produce the output files.
 
 Add `--save_cleaning_mask` to save a PNG image of the cleaned data and RFI mask for every frame. Images are stored in a subfolder next to the `.ucd` file, named after the `.ucd` file (without extension). Each PNG is named `<ucd_stem>_NNN.png` (zero-padded by total frame count) and shows the Data and Mask arrays side-by-side with a Greys colormap. By default this is off to avoid the extra I/O overhead during processing.
 
-If you have already have a .ucd file ready, you can just run...
+
+
+
+### Transient Search GUI (DM-vs-time spectrogram viewer)
+
+The last step of full pipeline that can be runned separately on calculated .dmt file  to start visual interactive analysis 
+To run use command:
+
+```bash
+python -m dspz_pipeline.gui.trans_search "_output_0834/Cleaned_ B0834p06A141010_032001.jds.ucd.dmt" 12.872
+
+python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd.dmt" 4.8471
+```
+
+**Controls:**
+- **Click on spectrogram** -- select a time point for pulse inspection
+- **smpar < >** -- adjust high-pass smoothing (1-8)
+- **smpar_b < >** -- adjust low-pass background removal (32-4096)
+- **DM step < >** -- shift DM offset from central value
+- **Individual** -- toggle individual pulse analysis (by clicking spectrogram to inspect)
+- **Repetitive** -- toggle repeating pulse FFT analysis (by clicking spectrogram to inspect)
+- **Parts / N of Parts** -- select time window for FFT analysis (indicated by yellow highlighting of the spectrogram lines)
+- **Min/Max scale sliders** -- adjust display contrast
+
+
+### Individual pulse viewer 
+
+GUI window opened in **Individual** analysis mode after click on spectrogram.
+Shows ...
+
+**Controls:**
+- **DM +/-** -- fine-tune dispersion measure (step = 0.002 pc/cm^3)
+- **Shift < >** -- shift the dedispersion in time
+- **Narr / Wide** -- adjust frequency resolution for spectrum display
+
+
+### Repeating pulse FFT analysis  
+Plot window opened in **Repetitive** analysis mode after click on spectrogram.
+Shows the ...
+
+
+
+
+
+
+## Running the full pipeline end-to-end
+
+To run both stages sequentially from raw data to final analysis:
+
+```bash
+# Full pipeline: clean raw data and produce .ucd
+python -m dspz_pipeline.process_survey --indir _data --files A141010_032001.jds A141010_032843.jds --dm 12.872 --label "PSRB0834p06" --outdir _output --no-gui
+
+# Individual Search run IndSearch dedispersion on the .ucd output
+python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.872
+```
+
+
+
+
 
 
 
 ### Individual Search dedispersion (.ucd to .dmt)
 
 ```bash
-python -m dspz_pipeline.indsearch_main "_output_0834/Cleaned_ PSRB0834p06A141010_032001.jds.ucd"  12.872
+python -m dspz_pipeline.indsearch_main "_output_0834/Cleaned_ B0834p06A141010_032001.jds.ucd"  12.872
 
 python -m dspz_pipeline.indsearch_main "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd"  4.8471
 ```
@@ -165,54 +225,7 @@ python -m dspz_pipeline.gui.dm_time_plot "_output_1133/Cleaned_ B1133p16C231121_
 
 ### Full pipeline interactive tools (on existing output files)
 
-#### TransientSearch GUI (DM-vs-time spectrogram viewer)
-
-If you already calculated .dmt by the Full pipeline and want to start visual interactive analysis, you can run command:
-
-```bash
-python -m dspz_pipeline.gui.trans_search "_output_0834/Cleaned_ B0834p06A141010_032001.jds.ucd.dmt" 12.872
-
-python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd.dmt" 4.8471
-```
-
-**Controls:**
-- **smpar < >** -- adjust high-pass smoothing (1-8)
-- **smpar_b < >** -- adjust low-pass background removal (32-4096)
-- **DM step < >** -- shift DM offset from central value
-- **IND** -- toggle individual pulse analysis (click spectrogram to inspect)
-- **REP** -- toggle repeating pulse FFT analysis
-- **parts / N of parts** -- select time window for FFT analysis
-- **Min/Max scale sliders** -- adjust display contrast
-- **Click on spectrogram** -- select a time point for pulse inspection
-
-#### Individual pulse viewer (we do not run it separately)
-
-```bash
-python -m dspz_pipeline.gui.show_pulse "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.872 --ns 32768
-```
-
-**Controls:**
-- **DM +/-** -- fine-tune dispersion measure (step = 0.002 pc/cm^3)
-- **Shift < >** -- shift the dedispersion in time
-- **Narr / Wide** -- adjust frequency resolution for spectrum display
-
-#### Repeating pulse FFT analysis  (we do not run it separately)
-
-```bash
-python -m dspz_pipeline.gui.repeating_analysis "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt" 12.872
-```
-
-### Running the full pipeline end-to-end
-
-To run both stages sequentially from raw data to final analysis:
-
-```bash
-# Full pipeline: clean raw data and produce .ucd
-python -m dspz_pipeline.process_survey --indir _data --files A141010_032001.jds A141010_032843.jds --dm 12.872 --label "PSRB0834p06" --outdir _output --no-gui
-
-# Individual Search run IndSearch dedispersion on the .ucd output
-python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.872
-```
+#
 
 ## Command-Line Arguments Reference
 
