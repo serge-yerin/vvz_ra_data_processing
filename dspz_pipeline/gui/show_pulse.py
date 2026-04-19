@@ -182,13 +182,17 @@ class ShowPulseApp:
             self.dat_ucd[:, :n_show],
             aspect="auto", origin="lower", cmap="gray_r",
             interpolation="nearest",
+            extent=[0, n_show, 16.5, 33.0],
         )
         ax_data.set_title("Cleaned data (from .ucd)")
         ax_data.set_xlabel("Time sample")
-        ax_data.set_ylabel("Freq channel")
+        ax_data.set_ylabel("Frequency (MHz)")
 
-        # --- Ax 2: Spectrum of pulse (S/N vs frequency) ------------------- #
-        ax_spec = self.fig.add_subplot(3, 2, 3)
+        # Create ax_img first so ax_spec can share its Y axis
+        ax_img = self.fig.add_subplot(3, 2, 4)
+
+        # --- Ax 2: Spectrum of pulse (rotated CCW: frequency on Y, S/N on X) #
+        ax_spec = self.fig.add_subplot(3, 2, 3, sharey=ax_img)
         op_spec = np.sum(pulse[:, nsf - 10:nsf + 11], axis=1)
         mt_spec, st_spec = erov(op_spec)
         if st_spec == 0:
@@ -198,20 +202,22 @@ class ShowPulseApp:
             axis=1,
         ) * np.sqrt(nofch / float(wofsg))
         freq_axis = 16.5 + np.arange(nofch) / (nofch - 1.0) * 16.5
-        ax_spec.step(freq_axis, rebinned, where="mid")
-        ax_spec.set_xlim(16.5, 33.0)
-        ax_spec.set_xlabel("Frequency (MHz)")
-        ax_spec.set_ylabel("S/N")
+        ax_spec.step(rebinned, freq_axis, where="mid")
+        ax_spec.invert_xaxis()
+        ax_spec.set_xlabel("S/N")
+        ax_spec.set_ylabel("Frequency (MHz)")
         ax_spec.set_title("Spectrum of pulse")
 
         band_khz = 33000.0 * wofsg / float(nofch) / 8192.0
         self.lbl_band.config(text=f"{band_khz:.1f} kHz")
 
-        # --- Ax 3: Pulse profile (smoothed, total) ----------------------- #
-        ax_prof = self.fig.add_subplot(3, 2, 4)
+        # --- Ax 3: Pulse image -------------------------------------------- #
         pulse_sm = pulse.copy()
         for j in range(wofsg):
             pulse_sm[j, :] = smooth_edge(pulse[j, :], self.smpar)
+
+        # --- Ax 4: Pulse profile (smoothed, total) ----------------------- #
+        ax_prof = self.fig.add_subplot(3, 2, 5)
         profile = np.sum(pulse_sm, axis=0)
         bg_mean = np.mean(np.sum(pulse_sm[:, :31], axis=0))
         bg_std = np.std(np.sum(pulse_sm[:, :31], axis=0))
@@ -223,29 +229,29 @@ class ShowPulseApp:
         ax_prof.set_ylabel("S/N")
         ax_prof.set_title(f"Pulse profile  DM={self.dm:.4f}")
 
-        # --- Ax 4: Pulse image -------------------------------------------- #
-        ax_img = self.fig.add_subplot(3, 2, 5)
         ax_img.imshow(
             pulse_sm,
             aspect="auto", origin="lower", cmap="gray_r",
             interpolation="nearest",
+            extent=[0, pulse_sm.shape[1], 16.5, 33.0],
         )
         ax_img.set_xlabel("Time sample")
-        ax_img.set_ylabel("Freq channel")
+        ax_img.set_ylabel("Frequency (MHz)")
         ax_img.set_title("Dedispersed pulse")
 
         # --- Ax 5: Sub-band profiles ------------------------------------- #
         ax_sub = self.fig.add_subplot(3, 2, 6)
         sub_ranges = [(0, 1024), (1024, 2048), (2048, 3072), (3072, 4096)]
         freq_labels = ["16.50-20.63", "20.63-24.75", "24.75-28.88", "28.88-33.00"]
-        for (lo, hi), lbl in zip(sub_ranges, freq_labels):
+        sub_colors = ["tab:blue", "tab:green", "tab:orange", "tab:red"]
+        for (lo, hi), lbl, color in zip(sub_ranges, freq_labels, sub_colors):
             hi = min(hi, wofsg)
             sub = np.sum(pulse_sm[lo:hi, :], axis=0)
             sub_bg_m = np.mean(np.sum(pulse_sm[lo:hi, :31], axis=0))
             sub_bg_s = np.std(np.sum(pulse_sm[lo:hi, :31], axis=0))
             if sub_bg_s == 0:
                 sub_bg_s = 1.0
-            ax_sub.plot((sub - sub_bg_m) / sub_bg_s, label=f"{lbl} MHz")
+            ax_sub.plot((sub - sub_bg_m) / sub_bg_s, label=f"{lbl} MHz", color=color)
         ax_sub.legend(fontsize=7)
         ax_sub.set_xlabel("Time sample")
         ax_sub.set_ylabel("S/N")
