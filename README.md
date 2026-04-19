@@ -2,7 +2,7 @@
 
 A Python code for processing low-frequency radio astronomy data from DSPZ receivers (0-40 MHz range) to search for pulsar and transient signals. It reads `.jds` binary data files recorded in spectra mode, removes low-level radio frequency interference (RFI), performs incoherent dedispersion to search for pulsar and transient signals, and provides interactive visualization tools for inspecting the results.
 
-This is a direct translation of the original IDL codebase written by Dr. Vyacheslav Zakharenko for the DSPZ (Digital Spectro-Polarimeter "Z") instrument used at the UTR-2 radio telescope and URAN VLBI system.
+This is a direct translation of the original IDL codebase written by Dr. Vyacheslav Zakharenko for the DSPZ (Digital Spectro-Polarimeter "Z") instrument used at the UTR-2 radio telescope and URAN VLBI system. Pay attention, many variables are hardcoded for particular parameters observations (like 16.5 - 33.0 MHz range)
 
 You can find more on the receivers in:
 
