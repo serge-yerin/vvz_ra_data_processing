@@ -354,6 +354,31 @@ sudo dnf install python3-tkinter
 brew install python-tk@3.12
 # Windows: included with the official Python installer
 ```
+On macOS install .venv from the main python path:
+
+```bash
+# Find brew python path
+brew --prefix python
+
+# Use the full path to brew's python
+/opt/homebrew/opt/python@3.12/bin/python3.12 -m venv .venv
+# adjust version number to what you have installed
+
+# Activate venv and install dependencies
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# Reselect interpreter in VSCode
+# Ctrl+Shift+P → Python: Select Interpreter → pick the .venv one
+
+# In your terminal:
+brew install python-tk@3.13
+
+# Verify it works
+python -c "import tkinter; tkinter._test()"
+```
+
+
 
 ### Processing is slow
 
