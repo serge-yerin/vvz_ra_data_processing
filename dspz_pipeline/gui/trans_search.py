@@ -384,6 +384,7 @@ class TransSearchApp:
             show_pulse_gui(
                 self.filename, self.dm_const, self.dm_pos, ns,
                 self.picsize, self.smpar, self.acc_dm_norm, self.dm_stepnumb,
+                trans_app=self,
             )
 
     def _show_pulse_selection(self, ns: int):
@@ -392,10 +393,11 @@ class TransSearchApp:
         chunk = self.acc_dm_norm[:, ns - nsf: ns + nsf + 1]
         chunk_clipped = np.clip(chunk, self.minscl, self.maxscl)
 
-        fig_sel, (ax_img, ax_surf) = plt.subplots(
+        self.fig_sel, (ax_img, ax_surf) = plt.subplots(
             1, 2, figsize=(8, 4),
             subplot_kw={"projection": None},
         )
+        fig_sel = self.fig_sel
         # 2-D image
         ax_img.imshow(
             chunk_clipped,

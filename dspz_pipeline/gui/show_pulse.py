@@ -25,7 +25,7 @@ matplotlib.use("TkAgg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
 try:
@@ -56,6 +56,7 @@ class ShowPulseApp:
         smpar: int,
         acc_dm_norm: np.ndarray | None = None,
         dm_stepnumb: int = 51,
+        trans_app=None,
     ):
         # The filename from TransSearch points to the .dmt file;
         # ShowPulse reads the .ucd file (strip .dmt extension)
@@ -71,6 +72,7 @@ class ShowPulseApp:
         self.smpar = smpar
         self.acc_dm_norm = acc_dm_norm
         self.dm_stepnumb = dm_stepnumb
+        self.trans_app = trans_app
 
         # Parameters from IDL showpulse.pro
         self.time_res = 64 * 8192.0 / 66_000_000.0
@@ -82,6 +84,11 @@ class ShowPulseApp:
 
         # Compute current DM
         self.dm = dm_const + 0.04 * (dm_pos - 25)
+
+        # Save initial values for reset
+        self.dm_init = self.dm
+        self.sh_t_init = self.sh_t
+        self.smfreq_init = self.smfreq
 
         # Load data from .ucd file
         self._load_ucd_data()
@@ -127,6 +134,8 @@ class ShowPulseApp:
         ctrl.pack(side=tk.TOP, fill=tk.X, padx=4, pady=4)
 
         ttk.Button(ctrl, text="ESC", command=self._on_close).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="Reset", command=self._reset).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="Save PNGs", command=self._save_pngs).pack(side=tk.LEFT, padx=2)
 
         ttk.Label(ctrl, text="  DM:").pack(side=tk.LEFT)
         ttk.Button(ctrl, text="-", width=2, command=lambda: self._adj_dm(-1)).pack(side=tk.LEFT)
@@ -135,10 +144,12 @@ class ShowPulseApp:
         ttk.Button(ctrl, text="+", width=2, command=lambda: self._adj_dm(+1)).pack(side=tk.LEFT)
 
         ttk.Label(ctrl, text="  Shift:").pack(side=tk.LEFT)
+        ttk.Button(ctrl, text="<<", width=3, command=lambda: self._adj_shift(-5)).pack(side=tk.LEFT)
         ttk.Button(ctrl, text="<", width=2, command=lambda: self._adj_shift(-1)).pack(side=tk.LEFT)
         self.lbl_shift = ttk.Label(ctrl, text=str(self.sh_t), width=4)
         self.lbl_shift.pack(side=tk.LEFT)
         ttk.Button(ctrl, text=">", width=2, command=lambda: self._adj_shift(+1)).pack(side=tk.LEFT)
+        ttk.Button(ctrl, text=">>", width=3, command=lambda: self._adj_shift(+5)).pack(side=tk.LEFT)
 
         ttk.Label(ctrl, text="    Subband adjust:").pack(side=tk.LEFT)
         ttk.Button(ctrl, text="Finer", command=lambda: self._adj_smfreq(+1)).pack(side=tk.LEFT, padx=2)
@@ -147,9 +158,19 @@ class ShowPulseApp:
         self.lbl_band.pack(side=tk.LEFT)
 
     def _build_canvas(self):
-        self.fig = Figure(figsize=(11, 8), dpi=100)
+        # Main window: 2x2 grid of pulse analysis plots
+        self.fig = Figure(figsize=(11, 7), dpi=100)
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        # Secondary window: cleaned data overview
+        self.data_win = tk.Toplevel(self.root)
+        self.data_win.title("Cleaned data (from .ucd)")
+        self.data_win.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.data_fig = Figure(figsize=(11, 3), dpi=100)
+        self.data_canvas = FigureCanvasTkAgg(self.data_fig, master=self.data_win)
+        self.data_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        NavigationToolbar2Tk(self.data_canvas, self.data_win).update()
 
     # ------------------------------------------------------------------ #
     #  Display update
@@ -158,6 +179,7 @@ class ShowPulseApp:
     def _update_display(self):
         """Recompute dedispersion and redraw all panels."""
         self.fig.clear()
+        self.data_fig.clear()
 
         nsf = self.nsframe
         wofsg = self.wofsg
@@ -175,9 +197,9 @@ class ShowPulseApp:
             if end <= self.dat_ucd.shape[1]:
                 pulse[j, :] = self.dat_ucd[j, stsp:end]
 
-        # --- Ax 1: Cleaned data overview --------------------------------- #
-        ax_data = self.fig.add_subplot(3, 2, (1, 2))
+        # --- Secondary window: Cleaned data overview ---------------------- #
         n_show = min(44000, self.dat_ucd.shape[1])
+        ax_data = self.data_fig.add_subplot(1, 1, 1)
         ax_data.imshow(
             self.dat_ucd[:, :n_show],
             aspect="auto", origin="lower", cmap="gray_r",
@@ -187,12 +209,14 @@ class ShowPulseApp:
         ax_data.set_title("Cleaned data (from .ucd)")
         ax_data.set_xlabel("Time sample")
         ax_data.set_ylabel("Frequency (MHz)")
+        self.data_fig.tight_layout()
+        self.data_canvas.draw()
 
         # Create ax_img first so ax_spec can share its Y axis
-        ax_img = self.fig.add_subplot(3, 2, 4)
+        ax_img = self.fig.add_subplot(2, 2, 2)
 
         # --- Ax 2: Spectrum of pulse (rotated CCW: frequency on Y, S/N on X) #
-        ax_spec = self.fig.add_subplot(3, 2, 3, sharey=ax_img)
+        ax_spec = self.fig.add_subplot(2, 2, 1, sharey=ax_img)
         op_spec = np.sum(pulse[:, nsf - 10:nsf + 11], axis=1)
         mt_spec, st_spec = erov(op_spec)
         if st_spec == 0:
@@ -206,10 +230,9 @@ class ShowPulseApp:
         ax_spec.invert_xaxis()
         ax_spec.set_xlabel("S/N")
         ax_spec.set_ylabel("Frequency (MHz)")
-        ax_spec.set_title("Spectrum of pulse")
-
         band_khz = 33000.0 * wofsg / float(nofch) / 8192.0
         self.lbl_band.config(text=f"{band_khz:.1f} kHz")
+        ax_spec.set_title(f"Spectrum of pulse (Bandwidth: {band_khz:.1f} kHz)")
 
         # --- Ax 3: Pulse image -------------------------------------------- #
         pulse_sm = pulse.copy()
@@ -217,7 +240,7 @@ class ShowPulseApp:
             pulse_sm[j, :] = smooth_edge(pulse[j, :], self.smpar)
 
         # --- Ax 4: Pulse profile (smoothed, total) ----------------------- #
-        ax_prof = self.fig.add_subplot(3, 2, 5)
+        ax_prof = self.fig.add_subplot(2, 2, 3)
         profile = np.sum(pulse_sm, axis=0)
         bg_mean = np.mean(np.sum(pulse_sm[:, :31], axis=0))
         bg_std = np.std(np.sum(pulse_sm[:, :31], axis=0))
@@ -237,10 +260,10 @@ class ShowPulseApp:
         )
         ax_img.set_xlabel("Time sample")
         ax_img.set_ylabel("Frequency (MHz)")
-        ax_img.set_title("Dedispersed pulse")
+        ax_img.set_title(f"Dedispersed pulse (Spectrum # {self.ns} in file)")
 
         # --- Ax 5: Sub-band profiles ------------------------------------- #
-        ax_sub = self.fig.add_subplot(3, 2, 6)
+        ax_sub = self.fig.add_subplot(2, 2, 4)
         sub_ranges = [(0, 1024), (1024, 2048), (2048, 3072), (3072, 4096)]
         freq_labels = ["16.50-20.63", "20.63-24.75", "24.75-28.88", "28.88-33.00"]
         sub_colors = ["tab:blue", "tab:green", "tab:orange", "tab:red"]
@@ -255,7 +278,7 @@ class ShowPulseApp:
         ax_sub.legend(fontsize=7)
         ax_sub.set_xlabel("Time sample")
         ax_sub.set_ylabel("S/N")
-        ax_sub.set_title("Sub-band profiles")
+        ax_sub.set_title(f"Sub-band profiles (Shift: {self.sh_t})")
 
         self.fig.tight_layout()
         self.canvas.draw()
@@ -264,14 +287,22 @@ class ShowPulseApp:
     #  Control callbacks
     # ------------------------------------------------------------------ #
 
+    def _reset(self):
+        self.dm = self.dm_init
+        self.sh_t = self.sh_t_init
+        self.smfreq = self.smfreq_init
+        self.lbl_dm.config(text=f"{self.dm:.4f}")
+        self.lbl_shift.config(text=str(self.sh_t))
+        self._update_display()
+
     def _adj_dm(self, direction):
         self.dm += direction * self.dm_step
         self.lbl_dm.config(text=f"{self.dm:.4f}")
         self._update_display()
 
     def _adj_shift(self, direction):
-        if -self.nsframe < self.sh_t + direction < self.nsframe:
-            self.sh_t += direction
+        if -self.nsframe < self.sh_t - direction < self.nsframe:
+            self.sh_t -= direction
         self.lbl_shift.config(text=str(self.sh_t))
         self._update_display()
 
@@ -279,7 +310,41 @@ class ShowPulseApp:
         self.smfreq = max(2, min(10, self.smfreq + direction))
         self._update_display()
 
+    @staticmethod
+    def _save_figure_fixed(fig, path, target_width=16.0, dpi=200):
+        """Save a figure at a fixed width in inches (preserving aspect ratio),
+        independent of the current window size."""
+        orig_w, orig_h = fig.get_size_inches()
+        aspect = orig_h / orig_w
+        fig.set_size_inches(target_width, target_width * aspect)
+        fig.savefig(path, dpi=dpi, bbox_inches="tight")
+        fig.set_size_inches(orig_w, orig_h)
+        fig.canvas.draw_idle()
+
+    def _save_pngs(self):
+        ucd_path = Path(self.ucd_filename)
+        folder = ucd_path.parent / f"{ucd_path.name}_individual_pulse_ns={self.ns}"
+        folder.mkdir(exist_ok=True)
+
+        self._save_figure_fixed(self.fig,      folder / "individual_pulse_viewer.png")
+        print(f"Saved: {folder / 'individual_pulse_viewer.png'}")
+
+        self._save_figure_fixed(self.data_fig, folder / "cleaned_data.png", target_width=32.0)
+        print(f"Saved: {folder / 'cleaned_data.png'}")
+
+        if self.trans_app is not None:
+            self._save_figure_fixed(self.trans_app.fig, folder / "transient_search.png", target_width=32.0)
+            print(f"Saved: {folder / 'transient_search.png'}")
+
+            fig_sel = getattr(self.trans_app, "fig_sel", None)
+            if fig_sel is not None:
+                self._save_figure_fixed(fig_sel, folder / "pulse_selection.png")
+                print(f"Saved: {folder / 'pulse_selection.png'}")
+
+        print(f"All PNGs saved to: {folder}")
+
     def _on_close(self):
+        self.data_win.destroy()
         self.root.destroy()
 
     def run(self):
@@ -297,11 +362,12 @@ def show_pulse_gui(
     smpar: int,
     acc_dm_norm: np.ndarray | None = None,
     dm_stepnumb: int = 51,
+    trans_app=None,
 ) -> None:
     """Launch the individual pulse viewer."""
     app = ShowPulseApp(
         filename, dm_const, dm_pos, ns, picsize, smpar,
-        acc_dm_norm, dm_stepnumb,
+        acc_dm_norm, dm_stepnumb, trans_app,
     )
     if acc_dm_norm is None:
         app.run()
