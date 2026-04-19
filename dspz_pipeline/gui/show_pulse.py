@@ -140,9 +140,9 @@ class ShowPulseApp:
         self.lbl_shift.pack(side=tk.LEFT)
         ttk.Button(ctrl, text=">", width=2, command=lambda: self._adj_shift(+1)).pack(side=tk.LEFT)
 
-        ttk.Label(ctrl, text="  Band (Narr/Wide):").pack(side=tk.LEFT)
-        ttk.Button(ctrl, text="Narr", command=lambda: self._adj_smfreq(+1)).pack(side=tk.LEFT, padx=2)
-        ttk.Button(ctrl, text="Wide", command=lambda: self._adj_smfreq(-1)).pack(side=tk.LEFT, padx=2)
+        ttk.Label(ctrl, text="    Subband adjust:").pack(side=tk.LEFT)
+        ttk.Button(ctrl, text="Finer", command=lambda: self._adj_smfreq(+1)).pack(side=tk.LEFT, padx=2)
+        ttk.Button(ctrl, text="Wider", command=lambda: self._adj_smfreq(-1)).pack(side=tk.LEFT, padx=2)
         self.lbl_band = ttk.Label(ctrl, text="", width=12)
         self.lbl_band.pack(side=tk.LEFT)
 
