@@ -157,6 +157,18 @@ class ShowPulseApp:
         self.lbl_band = ttk.Label(ctrl, text="", width=12)
         self.lbl_band.pack(side=tk.LEFT)
 
+        self.highlight_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(
+            ctrl, text="Highlight",
+            variable=self.highlight_var,
+            command=self._update_display,
+        ).pack(side=tk.LEFT, padx=6)
+
+        ttk.Label(ctrl, text="  STD pts:").pack(side=tk.LEFT)
+        self.std_npts_var = tk.IntVar(value=20)
+        ttk.Entry(ctrl, textvariable=self.std_npts_var, width=5).pack(side=tk.LEFT)
+        ttk.Button(ctrl, text="Calc STD", command=self._update_display).pack(side=tk.LEFT, padx=2)
+
     def _build_canvas(self):
         # Main window: 2x2 grid of pulse analysis plots
         self.fig = Figure(figsize=(11, 7), dpi=100)
@@ -215,7 +227,7 @@ class ShowPulseApp:
         # Create ax_img first so ax_spec can share its Y axis
         ax_img = self.fig.add_subplot(2, 2, 2)
 
-        # --- Ax 2: Spectrum of pulse (rotated CCW: frequency on Y, S/N on X) #
+        # --- Ax 2: Spectrum of pulse (rotated CCW: frequency on Y, STDs on X) #
         ax_spec = self.fig.add_subplot(2, 2, 1, sharey=ax_img)
         op_spec = np.sum(pulse[:, nsf - 10:nsf + 11], axis=1)
         mt_spec, st_spec = erov(op_spec)
@@ -225,11 +237,27 @@ class ShowPulseApp:
             ((op_spec - mt_spec) / st_spec).reshape(nofch, wofsg // nofch),
             axis=1,
         ) * np.sqrt(nofch / float(wofsg))
+        try:
+            n_pts = int(self.std_npts_var.get())
+        except (tk.TclError, ValueError):
+            n_pts = 20
+        n_pts = max(2, min(n_pts, len(rebinned)))
+        norm_mean = float(np.mean(rebinned[:n_pts]))
+        norm_std = float(np.std(rebinned[:n_pts]))
+        if norm_std == 0:
+            norm_std = 1.0
+        rebinned = (rebinned - norm_mean) / norm_std
         freq_axis = 16.5 + np.arange(nofch) / (nofch - 1.0) * 16.5
         ax_spec.step(rebinned, freq_axis, where="mid")
         ax_spec.invert_xaxis()
-        ax_spec.set_xlabel("S/N")
+        ax_spec.set_xlabel("STDs")
         ax_spec.set_ylabel("Frequency (MHz)")
+
+        if getattr(self, "highlight_var", None) is not None and self.highlight_var.get():
+            half_step = (16.5 / (nofch - 1.0)) / 2.0 if nofch > 1 else 0.0
+            y_bot = freq_axis[0] - half_step
+            y_top = freq_axis[n_pts - 1] + half_step
+            ax_spec.axhspan(y_bot, y_top, alpha=0.15, color="yellow", zorder=2)
         band_khz = 33000.0 * wofsg / float(nofch) / 8192.0
         self.lbl_band.config(text=f"{band_khz:.1f} kHz")
         ax_spec.set_title(f"Spectrum of pulse (Bandwidth: {band_khz:.1f} kHz)")
@@ -261,6 +289,14 @@ class ShowPulseApp:
         ax_img.set_xlabel("Time sample")
         ax_img.set_ylabel("Frequency (MHz)")
         ax_img.set_title(f"Dedispersed pulse (Spectrum # {self.ns} in file)")
+
+        if getattr(self, "highlight_var", None) is not None and self.highlight_var.get():
+            x_mid = pulse_sm.shape[1] / 2.0
+            x_half = 0.10 * pulse_sm.shape[1]
+            ax_img.axvspan(
+                x_mid - x_half, x_mid + x_half,
+                alpha=0.15, color="yellow", zorder=2,
+            )
 
         # --- Ax 5: Sub-band profiles ------------------------------------- #
         ax_sub = self.fig.add_subplot(2, 2, 4)
