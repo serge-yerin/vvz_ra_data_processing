@@ -179,10 +179,45 @@ class ShowPulseApp:
         self.data_win = tk.Toplevel(self.root)
         self.data_win.title("Cleaned data (from .ucd)")
         self.data_win.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        toolbar_frame = ttk.Frame(self.data_win)
+        toolbar_frame.pack(side=tk.TOP, fill=tk.X)
+
+        main_frame = ttk.Frame(self.data_win)
+        main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+        sliders_frame = ttk.Frame(main_frame)
+        sliders_frame.pack(side=tk.LEFT, fill=tk.Y, padx=2, pady=2)
+
+        col_high = ttk.Frame(sliders_frame)
+        col_high.pack(side=tk.LEFT, fill=tk.Y, padx=1)
+        ttk.Label(col_high, text="vmax").pack(side=tk.TOP)
+        self.vmax_var = tk.DoubleVar(value=10.0)
+        self.scale_high = tk.Scale(
+            col_high, from_=15.0, to=-5.0, resolution=0.1,
+            orient=tk.VERTICAL, variable=self.vmax_var,
+            command=self._on_vmax_change, showvalue=True,
+            length=240, width=10, sliderlength=18,
+        )
+        self.scale_high.pack(side=tk.TOP, fill=tk.Y, expand=True)
+
+        col_low = ttk.Frame(sliders_frame)
+        col_low.pack(side=tk.LEFT, fill=tk.Y, padx=1)
+        ttk.Label(col_low, text="vmin").pack(side=tk.TOP)
+        self.vmin_var = tk.DoubleVar(value=-1.0)
+        self.scale_low = tk.Scale(
+            col_low, from_=15.0, to=-5.0, resolution=0.1,
+            orient=tk.VERTICAL, variable=self.vmin_var,
+            command=self._on_vmin_change, showvalue=True,
+            length=240, width=10, sliderlength=18,
+        )
+        self.scale_low.pack(side=tk.TOP, fill=tk.Y, expand=True)
+
         self.data_fig = Figure(figsize=(11, 3), dpi=100)
-        self.data_canvas = FigureCanvasTkAgg(self.data_fig, master=self.data_win)
-        self.data_canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        NavigationToolbar2Tk(self.data_canvas, self.data_win).update()
+        self.data_canvas = FigureCanvasTkAgg(self.data_fig, master=main_frame)
+        self.data_canvas.get_tk_widget().pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+        NavigationToolbar2Tk(self.data_canvas, toolbar_frame).update()
 
     # ------------------------------------------------------------------ #
     #  Display update
@@ -191,7 +226,6 @@ class ShowPulseApp:
     def _update_display(self):
         """Recompute dedispersion and redraw all panels."""
         self.fig.clear()
-        self.data_fig.clear()
 
         nsf = self.nsframe
         wofsg = self.wofsg
@@ -209,20 +243,7 @@ class ShowPulseApp:
             if end <= self.dat_ucd.shape[1]:
                 pulse[j, :] = self.dat_ucd[j, stsp:end]
 
-        # --- Secondary window: Cleaned data overview ---------------------- #
-        n_show = min(44000, self.dat_ucd.shape[1])
-        ax_data = self.data_fig.add_subplot(1, 1, 1)
-        ax_data.imshow(
-            self.dat_ucd[:, :n_show],
-            aspect="auto", origin="lower", cmap="gray_r",
-            interpolation="nearest",
-            extent=[0, n_show, 16.5, 33.0],
-        )
-        ax_data.set_title("Cleaned data (from .ucd)")
-        ax_data.set_xlabel("Time sample")
-        ax_data.set_ylabel("Frequency (MHz)")
-        self.data_fig.tight_layout()
-        self.data_canvas.draw()
+        self._redraw_data_plot()
 
         # Create ax_img first so ax_spec can share its Y axis
         ax_img = self.fig.add_subplot(2, 2, 2)
@@ -322,6 +343,49 @@ class ShowPulseApp:
     # ------------------------------------------------------------------ #
     #  Control callbacks
     # ------------------------------------------------------------------ #
+
+    def _redraw_data_plot(self):
+        """Redraw the cleaned-data overview using current vmin/vmax sliders."""
+        if not hasattr(self, "_data_norm"):
+            n_show = min(44000, self.dat_ucd.shape[1])
+            data_slice = self.dat_ucd[:, :n_show]
+            data_mean = float(np.mean(data_slice))
+            data_std = float(np.std(data_slice))
+            if data_std == 0:
+                data_std = 1.0
+            self._data_norm = (data_slice - data_mean) / data_std
+            self._data_n_show = n_show
+
+        self.data_fig.clear()
+        ax_data = self.data_fig.add_subplot(1, 1, 1)
+        ax_data.imshow(
+            self._data_norm,
+            aspect="auto", origin="lower", cmap="gray_r",
+            interpolation="nearest",
+            extent=[0, self._data_n_show, 16.5, 33.0],
+            vmin=self.vmin_var.get(), vmax=self.vmax_var.get(),
+        )
+        ax_data.set_title("Cleaned data (from .ucd)")
+        ax_data.set_xlabel("Time sample")
+        ax_data.set_ylabel("Frequency (MHz)")
+        self.data_fig.tight_layout()
+        self.data_canvas.draw()
+
+    def _on_vmin_change(self, value):
+        v = float(value)
+        vmax = self.vmax_var.get()
+        if v >= vmax:
+            self.vmin_var.set(round(vmax - 0.1, 1))
+            return
+        self._redraw_data_plot()
+
+    def _on_vmax_change(self, value):
+        v = float(value)
+        vmin = self.vmin_var.get()
+        if v <= vmin:
+            self.vmax_var.set(round(vmin + 0.1, 1))
+            return
+        self._redraw_data_plot()
 
     def _reset(self):
         self.dm = self.dm_init

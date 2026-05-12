@@ -154,18 +154,22 @@ class TransSearchApp:
         self.lbl_pnum.pack(side=tk.LEFT)
         ttk.Button(r1, text=">", width=2, command=lambda: self._adj_pnum(+1)).pack(side=tk.LEFT)
 
-        ttk.Label(r1, text="  Min scale:").pack(side=tk.LEFT)
-        self.scl_min = tk.Scale(r1, from_=-50, to=50, resolution=0.1,
+        ttk.Button(r1, text="Save PNG", command=self._save_png).pack(side=tk.LEFT, padx=8)
+
+        # Row 2: scale sliders
+        r2 = ttk.Frame(ctrl)
+        r2.pack(fill=tk.X, pady=2)
+
+        ttk.Label(r2, text="Min scale:").pack(side=tk.LEFT)
+        self.scl_min = tk.Scale(r2, from_=-50, to=50, resolution=0.1,
                                 orient=tk.HORIZONTAL, length=200,
                                 command=self._on_scale_change)
         self.scl_min.pack(side=tk.LEFT, padx=4)
-        ttk.Label(r1, text="Max scale:").pack(side=tk.LEFT)
-        self.scl_max = tk.Scale(r1, from_=-50, to=50, resolution=0.1,
+        ttk.Label(r2, text="  Max scale:").pack(side=tk.LEFT)
+        self.scl_max = tk.Scale(r2, from_=-50, to=50, resolution=0.1,
                                 orient=tk.HORIZONTAL, length=200,
                                 command=self._on_scale_change)
         self.scl_max.pack(side=tk.LEFT, padx=4)
-
-        ttk.Button(r1, text="Save PNG", command=self._save_png).pack(side=tk.LEFT, padx=8)
 
     def _build_canvas(self):
         """Create the matplotlib canvas for the 16-strip spectrogram."""
