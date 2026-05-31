@@ -168,7 +168,7 @@ python -m dspz_pipeline.gui.dm_time_plot "_output_1133/Cleaned_ B1133p16C231121_
 If you already calculated .dmt by the Full pipeline and want to start visual interactive analysis, you can run command:
 
 ```bash
-python -m dspz_pipeline.gui.trans_search "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt" 12.872
+python -m dspz_pipeline.gui.trans_search "_output_0834/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt" 12.872
 
 python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd.dmt" 4.8471
 ```
@@ -244,6 +244,18 @@ python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_0320
 | `dmt_file`    | (required) | Path to the `.dmt` file to plot              |
 | `dm`          | (required) | Central dispersion measure (pc/cm^3)         |
 | `--dm-step`   | `0.004`  | DM step size [pc/cm^3]                         |
+
+## Graphic User Interface description
+
+In the end of the main pipeline or by running **dspz_pipeline.gui.dm_time_plot** on the existing .dmt file the main window of the user interface opens. It shows the 16 line plot of the data with compensated dispersion delay with DM value in the preset ranage (usually __ values). The script is intended to analyze data from 2 consecutively recoded 2GB .jds files (typically from UTR-2 pulsar-transient sky survey).
+The main window has 2 modes of operation:
+- Single pulse mode (button __ is ON)
+- Repetitive pulse mode (button __ is ON)
+
+### Single pulse mode
+When the button __ is ON user can 
+
+### Repetitive pulse mode
 
 ## File Formats
 
