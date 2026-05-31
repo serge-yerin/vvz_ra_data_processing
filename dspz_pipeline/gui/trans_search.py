@@ -154,18 +154,22 @@ class TransSearchApp:
         self.lbl_pnum.pack(side=tk.LEFT)
         ttk.Button(r1, text=">", width=2, command=lambda: self._adj_pnum(+1)).pack(side=tk.LEFT)
 
-        ttk.Label(r1, text="  Min scale:").pack(side=tk.LEFT)
-        self.scl_min = tk.Scale(r1, from_=-50, to=50, resolution=0.1,
+        ttk.Button(r1, text="Save PNG", command=self._save_png).pack(side=tk.LEFT, padx=8)
+
+        # Row 2: scale sliders
+        r2 = ttk.Frame(ctrl)
+        r2.pack(fill=tk.X, pady=2)
+
+        ttk.Label(r2, text="Min scale:").pack(side=tk.LEFT)
+        self.scl_min = tk.Scale(r2, from_=-50, to=50, resolution=0.1,
                                 orient=tk.HORIZONTAL, length=200,
                                 command=self._on_scale_change)
         self.scl_min.pack(side=tk.LEFT, padx=4)
-        ttk.Label(r1, text="Max scale:").pack(side=tk.LEFT)
-        self.scl_max = tk.Scale(r1, from_=-50, to=50, resolution=0.1,
+        ttk.Label(r2, text="  Max scale:").pack(side=tk.LEFT)
+        self.scl_max = tk.Scale(r2, from_=-50, to=50, resolution=0.1,
                                 orient=tk.HORIZONTAL, length=200,
                                 command=self._on_scale_change)
         self.scl_max.pack(side=tk.LEFT, padx=4)
-
-        ttk.Button(r1, text="Save PNG", command=self._save_png).pack(side=tk.LEFT, padx=8)
 
     def _build_canvas(self):
         """Create the matplotlib canvas for the 16-strip spectrogram."""
@@ -384,6 +388,7 @@ class TransSearchApp:
             show_pulse_gui(
                 self.filename, self.dm_const, self.dm_pos, ns,
                 self.picsize, self.smpar, self.acc_dm_norm, self.dm_stepnumb,
+                trans_app=self,
             )
 
     def _show_pulse_selection(self, ns: int):
@@ -392,10 +397,11 @@ class TransSearchApp:
         chunk = self.acc_dm_norm[:, ns - nsf: ns + nsf + 1]
         chunk_clipped = np.clip(chunk, self.minscl, self.maxscl)
 
-        fig_sel, (ax_img, ax_surf) = plt.subplots(
+        self.fig_sel, (ax_img, ax_surf) = plt.subplots(
             1, 2, figsize=(8, 4),
             subplot_kw={"projection": None},
         )
+        fig_sel = self.fig_sel
         # 2-D image
         ax_img.imshow(
             chunk_clipped,
