@@ -32,6 +32,7 @@ from matplotlib.figure import Figure
 
 try:
     import tkinter as tk
+    from tkinter import font as tkfont
     from tkinter import ttk
 except ImportError:
     raise SystemExit("tkinter is required for the GUI — install the tk package.")
@@ -116,7 +117,10 @@ class TransSearchApp:
         r1 = ttk.Frame(ctrl)
         r1.pack(fill=tk.X, pady=2)
 
-        ttk.Button(r1, text="Close", command=self._on_close).pack(side=tk.LEFT, padx=4)
+        # Bold labels for the two analysis-mode checkboxes
+        bold = tkfont.nametofont("TkDefaultFont").copy()
+        bold.configure(weight="bold")
+        ttk.Style().configure("Mode.TCheckbutton", font=bold)
 
         # --- Smoothing of the displayed data (feeds everything downstream) --
         grp_sm = ttk.LabelFrame(r1, text="Smoothing")
@@ -146,15 +150,15 @@ class TransSearchApp:
 
         self.ind_var = tk.BooleanVar(value=self.ind_mode)
         ttk.Checkbutton(
-            grp_click, text="Individual pulse viewer",
+            grp_click, text="Individual pulse viewer", style="Mode.TCheckbutton",
             variable=self.ind_var, command=self._toggle_ind,
-        ).pack(side=tk.LEFT, padx=(10, 4))
+        ).pack(side=tk.LEFT, padx=(18, 12))
 
         self.rep_var = tk.BooleanVar(value=self.rep_mode)
         ttk.Checkbutton(
-            grp_click, text="Repetitive (FFT) analysis:",
+            grp_click, text="Repetitive (FFT) analysis:", style="Mode.TCheckbutton",
             variable=self.rep_var, command=self._toggle_rep,
-        ).pack(side=tk.LEFT, padx=(10, 2))
+        ).pack(side=tk.LEFT, padx=(18, 6))
 
         ttk.Label(grp_click, text="parts:").pack(side=tk.LEFT)
         ttk.Button(grp_click, text="<", width=2, command=lambda: self._adj_nofp(-1)).pack(side=tk.LEFT)
@@ -168,18 +172,19 @@ class TransSearchApp:
         self.lbl_pnum.pack(side=tk.LEFT)
         ttk.Button(grp_click, text=">", width=2, command=lambda: self._adj_pnum(+1)).pack(side=tk.LEFT)
 
-        ttk.Button(r1, text="Save PNG", command=self._save_png).pack(side=tk.LEFT, padx=8)
+        ttk.Button(r1, text="Save PNG", command=self._save_png).pack(side=tk.LEFT, padx=(8, 2))
+        ttk.Button(r1, text="Close", command=self._on_close).pack(side=tk.LEFT, padx=2)
 
         # Row 2: scale sliders
         r2 = ttk.Frame(ctrl)
         r2.pack(fill=tk.X, pady=2)
 
-        ttk.Label(r2, text="Min scale:").pack(side=tk.LEFT)
+        ttk.Label(r2, text="Min scale:").pack(side=tk.LEFT, anchor=tk.S, pady=(0, 6))
         self.scl_min = tk.Scale(r2, from_=-50, to=50, resolution=0.1,
                                 orient=tk.HORIZONTAL, length=200,
                                 command=self._on_scale_change)
         self.scl_min.pack(side=tk.LEFT, padx=4)
-        ttk.Label(r2, text="  Max scale:").pack(side=tk.LEFT)
+        ttk.Label(r2, text="  Max scale:").pack(side=tk.LEFT, anchor=tk.S, pady=(0, 6))
         self.scl_max = tk.Scale(r2, from_=-50, to=50, resolution=0.1,
                                 orient=tk.HORIZONTAL, length=200,
                                 command=self._on_scale_change)
