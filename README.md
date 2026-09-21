@@ -155,15 +155,20 @@ The main window has 2 modes of operation:
 
 
 
-**Controls:**
-- **Click on spectrogram** -- select a time point for pulse inspection
-- **smpar < >** -- adjust high-pass smoothing (1-8)
-- **smpar_b < >** -- adjust low-pass background removal (32-4096)
-- **DM step < >** -- shift DM offset from central value
-- **Individual** -- toggle individual pulse analysis (by clicking spectrogram to inspect)
-- **Repetitive** -- toggle repeating pulse FFT analysis (by clicking spectrogram to inspect)
-- **Parts / N of Parts** -- select time window for FFT analysis (indicated by yellow highlighting of the spectrogram lines)
+**Controls** (grouped by what they affect):
+- **Close** / **Save PNG** -- window-level actions
+- **Smoothing** group -- shapes the displayed data and everything derived from it:
+  - **smpar < >** -- adjust high-pass smoothing (1-8)
+  - **smpar_b < >** -- adjust low-pass background removal (32-4096)
+- **On plot click** group -- what a click on the spectrogram analyses. The pulse-selection
+  window (2-D image + 3-D surface) always opens; the two checkboxes are independent and
+  can both be on:
+  - **DM step < >** -- DM offset from the central value used by both analyses below
+  - **[ ] Individual pulse viewer** -- also open the individual pulse viewer and the Cleaned data window
+  - **[ ] Repetitive (FFT) analysis** -- also run the repeating-pulse FFT analysis on the selected time window
+  - **parts / N of parts** -- time window for the FFT analysis (shown as yellow highlighting of the spectrogram strips)
 - **Min/Max scale sliders** -- adjust display contrast
+- **Click on spectrogram** -- select a time point for pulse inspection
 
 
 ### Single pulse mode

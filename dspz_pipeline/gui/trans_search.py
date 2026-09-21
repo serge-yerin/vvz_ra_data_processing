@@ -110,46 +110,63 @@ class TransSearchApp:
         ctrl = ttk.Frame(self.root)
         ctrl.pack(side=tk.TOP, fill=tk.X, padx=4, pady=4)
 
-        # Row 1: smoothing params
+        # Row 1: [Close] [Smoothing: smpar, smpar_b] [On plot click: DM step,
+        # mode checkboxes, FFT parts] [Save PNG].  Same left-to-right order as
+        # the IDL original; the frames make the grouping visible.
         r1 = ttk.Frame(ctrl)
         r1.pack(fill=tk.X, pady=2)
 
         ttk.Button(r1, text="Close", command=self._on_close).pack(side=tk.LEFT, padx=4)
 
-        ttk.Label(r1, text="  smpar:").pack(side=tk.LEFT)
-        ttk.Button(r1, text="<", width=2, command=lambda: self._adj_smpar(-1)).pack(side=tk.LEFT)
-        self.lbl_smpar = ttk.Label(r1, text=str(self.smpar), width=3)
+        # --- Smoothing of the displayed data (feeds everything downstream) --
+        grp_sm = ttk.LabelFrame(r1, text="Smoothing")
+        grp_sm.pack(side=tk.LEFT, padx=6, ipadx=4, ipady=2)
+
+        ttk.Label(grp_sm, text="smpar:").pack(side=tk.LEFT)
+        ttk.Button(grp_sm, text="<", width=2, command=lambda: self._adj_smpar(-1)).pack(side=tk.LEFT)
+        self.lbl_smpar = ttk.Label(grp_sm, text=str(self.smpar), width=3)
         self.lbl_smpar.pack(side=tk.LEFT)
-        ttk.Button(r1, text=">", width=2, command=lambda: self._adj_smpar(+1)).pack(side=tk.LEFT)
+        ttk.Button(grp_sm, text=">", width=2, command=lambda: self._adj_smpar(+1)).pack(side=tk.LEFT)
 
-        ttk.Label(r1, text="  smpar_b:").pack(side=tk.LEFT)
-        ttk.Button(r1, text="<", width=2, command=lambda: self._adj_smpar_b(-1)).pack(side=tk.LEFT)
-        self.lbl_smpar_b = ttk.Label(r1, text=str(self.smpar_background), width=5)
+        ttk.Label(grp_sm, text="  smpar_b:").pack(side=tk.LEFT)
+        ttk.Button(grp_sm, text="<", width=2, command=lambda: self._adj_smpar_b(-1)).pack(side=tk.LEFT)
+        self.lbl_smpar_b = ttk.Label(grp_sm, text=str(self.smpar_background), width=5)
         self.lbl_smpar_b.pack(side=tk.LEFT)
-        ttk.Button(r1, text=">", width=2, command=lambda: self._adj_smpar_b(+1)).pack(side=tk.LEFT)
+        ttk.Button(grp_sm, text=">", width=2, command=lambda: self._adj_smpar_b(+1)).pack(side=tk.LEFT)
 
-        ttk.Label(r1, text="  DM step:").pack(side=tk.LEFT)
-        ttk.Button(r1, text="<", width=2, command=lambda: self._adj_dm(-1)).pack(side=tk.LEFT)
-        self.lbl_dm = ttk.Label(r1, text=self._dm_label(), width=6)
+        # --- What a click on the plot analyses / opens ----------------------
+        grp_click = ttk.LabelFrame(r1, text="On plot click")
+        grp_click.pack(side=tk.LEFT, padx=6, ipadx=4, ipady=2)
+
+        ttk.Label(grp_click, text="DM step:").pack(side=tk.LEFT)
+        ttk.Button(grp_click, text="<", width=2, command=lambda: self._adj_dm(-1)).pack(side=tk.LEFT)
+        self.lbl_dm = ttk.Label(grp_click, text=self._dm_label(), width=6)
         self.lbl_dm.pack(side=tk.LEFT)
-        ttk.Button(r1, text=">", width=2, command=lambda: self._adj_dm(+1)).pack(side=tk.LEFT)
+        ttk.Button(grp_click, text=">", width=2, command=lambda: self._adj_dm(+1)).pack(side=tk.LEFT)
 
-        self.btn_ind = ttk.Button(r1, text="Individual", width=14, command=self._toggle_ind)
-        self.btn_ind.pack(side=tk.LEFT, padx=4)
-        self.btn_rep = ttk.Button(r1, text="Repetitive", width=14, command=self._toggle_rep)
-        self.btn_rep.pack(side=tk.LEFT, padx=4)
+        self.ind_var = tk.BooleanVar(value=self.ind_mode)
+        ttk.Checkbutton(
+            grp_click, text="Individual pulse viewer",
+            variable=self.ind_var, command=self._toggle_ind,
+        ).pack(side=tk.LEFT, padx=(10, 4))
 
-        ttk.Label(r1, text="  parts:").pack(side=tk.LEFT)
-        ttk.Button(r1, text="<", width=2, command=lambda: self._adj_nofp(-1)).pack(side=tk.LEFT)
-        self.lbl_nofp = ttk.Label(r1, text=str(self.nofp), width=3)
+        self.rep_var = tk.BooleanVar(value=self.rep_mode)
+        ttk.Checkbutton(
+            grp_click, text="Repetitive (FFT) analysis:",
+            variable=self.rep_var, command=self._toggle_rep,
+        ).pack(side=tk.LEFT, padx=(10, 2))
+
+        ttk.Label(grp_click, text="parts:").pack(side=tk.LEFT)
+        ttk.Button(grp_click, text="<", width=2, command=lambda: self._adj_nofp(-1)).pack(side=tk.LEFT)
+        self.lbl_nofp = ttk.Label(grp_click, text=str(self.nofp), width=3)
         self.lbl_nofp.pack(side=tk.LEFT)
-        ttk.Button(r1, text=">", width=2, command=lambda: self._adj_nofp(+1)).pack(side=tk.LEFT)
+        ttk.Button(grp_click, text=">", width=2, command=lambda: self._adj_nofp(+1)).pack(side=tk.LEFT)
 
-        ttk.Label(r1, text="  N of parts:").pack(side=tk.LEFT)
-        ttk.Button(r1, text="<", width=2, command=lambda: self._adj_pnum(-1)).pack(side=tk.LEFT)
-        self.lbl_pnum = ttk.Label(r1, text=str(self.p_num), width=3)
+        ttk.Label(grp_click, text="  N of parts:").pack(side=tk.LEFT)
+        ttk.Button(grp_click, text="<", width=2, command=lambda: self._adj_pnum(-1)).pack(side=tk.LEFT)
+        self.lbl_pnum = ttk.Label(grp_click, text=str(self.p_num), width=3)
         self.lbl_pnum.pack(side=tk.LEFT)
-        ttk.Button(r1, text=">", width=2, command=lambda: self._adj_pnum(+1)).pack(side=tk.LEFT)
+        ttk.Button(grp_click, text=">", width=2, command=lambda: self._adj_pnum(+1)).pack(side=tk.LEFT)
 
         ttk.Button(r1, text="Save PNG", command=self._save_png).pack(side=tk.LEFT, padx=8)
 
@@ -349,14 +366,14 @@ class TransSearchApp:
         self._redraw()
 
     def _toggle_ind(self):
-        self.ind_mode = not self.ind_mode
-        self.btn_ind.config(text=f"Individual {'ON' if self.ind_mode else 'OFF'}")
+        self.ind_mode = bool(self.ind_var.get())
         print(f"IND = {self.ind_mode}")
+        self._redraw()   # title shows IND/REP state
 
     def _toggle_rep(self):
-        self.rep_mode = not self.rep_mode
-        self.btn_rep.config(text=f"Repetitive {'ON' if self.rep_mode else 'OFF'}")
+        self.rep_mode = bool(self.rep_var.get())
         print(f"REP = {self.rep_mode}")
+        self._redraw()
 
     def _adj_nofp(self, delta):
         self.nofp_pow = max(0, min(4, self.nofp_pow + delta))

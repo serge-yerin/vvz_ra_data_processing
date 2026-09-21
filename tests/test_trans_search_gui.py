@@ -81,3 +81,14 @@ def test_parts_overlay_follows_selection(app):
     app._adj_nofp(+1)                       # 2 parts, part 0 -> samples 0..32768
     _pump(app.root)
     assert visible() == list(range(8))
+
+
+def test_mode_checkboxes_drive_the_flags(app):
+    assert app.ind_mode is False and app.rep_mode is False
+    app.ind_var.set(True); app._toggle_ind()
+    assert app.ind_mode is True and "IND=ON" in app._title_text()
+    app.rep_var.set(True); app._toggle_rep()
+    assert app.rep_mode is True and "REP=ON" in app._title_text()
+    app.ind_var.set(False); app._toggle_ind()
+    assert app.ind_mode is False and app.rep_mode is True   # independent flags
+    assert "IND=off" in app._title_text()
