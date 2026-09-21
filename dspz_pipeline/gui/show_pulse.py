@@ -37,6 +37,7 @@ except ImportError:
 from dspz_pipeline.config import HEADER_SIZE_BYTES
 from dspz_pipeline.io.dmt import compute_dm_delays
 from dspz_pipeline.cleaning.robust_stats import erov
+from dspz_pipeline.gui.lod_image import POOL_METHODS, LodImage
 from dspz_pipeline.utils import smooth_edge
 
 
@@ -186,8 +187,21 @@ class ShowPulseApp:
         main_frame = ttk.Frame(self.data_win)
         main_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        sliders_frame = ttk.Frame(main_frame)
-        sliders_frame.pack(side=tk.LEFT, fill=tk.Y, padx=2, pady=2)
+        left_frame = ttk.Frame(main_frame)
+        left_frame.pack(side=tk.LEFT, fill=tk.Y, padx=2, pady=2)
+
+        # Pixel-combining method used when many samples map onto one screen pixel
+        pool_frame = ttk.Frame(left_frame)
+        pool_frame.pack(side=tk.TOP, fill=tk.X, pady=(0, 6))
+        ttk.Label(pool_frame, text="Overview pooling").pack(side=tk.TOP)
+        self.pool_var = tk.StringVar(value="max")
+        ttk.OptionMenu(
+            pool_frame, self.pool_var, "max", *POOL_METHODS,
+            command=lambda _v: self._on_pool_change(),
+        ).pack(side=tk.TOP, fill=tk.X)
+
+        sliders_frame = ttk.Frame(left_frame)
+        sliders_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
         col_high = ttk.Frame(sliders_frame)
         col_high.pack(side=tk.LEFT, fill=tk.Y, padx=1)
@@ -197,7 +211,7 @@ class ShowPulseApp:
             col_high, from_=15.0, to=-5.0, resolution=0.1,
             orient=tk.VERTICAL, variable=self.vmax_var,
             command=self._on_vmax_change, showvalue=True,
-            length=240, width=10, sliderlength=18,
+            length=200, width=10, sliderlength=18,
         )
         self.scale_high.pack(side=tk.TOP, fill=tk.Y, expand=True)
 
@@ -209,15 +223,19 @@ class ShowPulseApp:
             col_low, from_=15.0, to=-5.0, resolution=0.1,
             orient=tk.VERTICAL, variable=self.vmin_var,
             command=self._on_vmin_change, showvalue=True,
-            length=240, width=10, sliderlength=18,
+            length=200, width=10, sliderlength=18,
         )
         self.scale_low.pack(side=tk.TOP, fill=tk.Y, expand=True)
 
-        self.data_fig = Figure(figsize=(11, 3), dpi=100)
+        # Constrained layout re-flows the margins on every draw, so the axes
+        # keep filling the canvas when the window is resized / maximised.
+        self.data_fig = Figure(figsize=(11, 3), dpi=100, layout="constrained")
         self.data_canvas = FigureCanvasTkAgg(self.data_fig, master=main_frame)
         self.data_canvas.get_tk_widget().pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
         NavigationToolbar2Tk(self.data_canvas, toolbar_frame).update()
+
+        self._build_data_plot()
 
     # ------------------------------------------------------------------ #
     #  Display update
@@ -242,8 +260,6 @@ class ShowPulseApp:
             end = stsp + 2 * nsf + 1
             if end <= self.dat_ucd.shape[1]:
                 pulse[j, :] = self.dat_ucd[j, stsp:end]
-
-        self._redraw_data_plot()
 
         # Create ax_img first so ax_spec can share its Y axis
         ax_img = self.fig.add_subplot(2, 2, 2)
@@ -344,32 +360,62 @@ class ShowPulseApp:
     #  Control callbacks
     # ------------------------------------------------------------------ #
 
-    def _redraw_data_plot(self):
-        """Redraw the cleaned-data overview using current vmin/vmax sliders."""
-        if not hasattr(self, "_data_norm"):
-            n_show = min(44000, self.dat_ucd.shape[1])
-            data_slice = self.dat_ucd[:, :n_show]
-            data_mean = float(np.mean(data_slice))
-            data_std = float(np.std(data_slice))
-            if data_std == 0:
-                data_std = 1.0
-            self._data_norm = (data_slice - data_mean) / data_std
-            self._data_n_show = n_show
+    def _build_data_plot(self):
+        """Create the cleaned-data overview once.
 
-        self.data_fig.clear()
-        ax_data = self.data_fig.add_subplot(1, 1, 1)
-        ax_data.imshow(
-            self._data_norm,
-            aspect="auto", origin="lower", cmap="gray_r",
-            interpolation="nearest",
-            extent=[0, self._data_n_show, 16.5, 33.0],
-            vmin=self.vmin_var.get(), vmax=self.vmax_var.get(),
+        The full 4096 x ~44000 array is far too big for matplotlib to
+        resample on every redraw (~10 s), so a :class:`LodImage` shows only
+        the visible window pooled to screen resolution.  Sliders change the
+        colour limits in place (in raw data units: mean + v * std), which
+        keeps the current zoom/pan untouched.
+        """
+        n_show = min(44000, self.dat_ucd.shape[1])
+        data_slice = self.dat_ucd[:, :n_show]
+        self._data_mean = float(np.mean(data_slice))
+        self._data_std = float(np.std(data_slice))
+        if self._data_std == 0:
+            self._data_std = 1.0
+
+        self.data_ax = self.data_fig.add_subplot(1, 1, 1)
+        self.data_lod = LodImage(
+            self.data_ax, data_slice,
+            x_extent=(0, n_show), y_extent=(16.5, 33.0),
+            method=self.pool_var.get(),
+            cmap="gray_r",
         )
-        ax_data.set_title("Cleaned data (from .ucd)")
-        ax_data.set_xlabel("Time sample")
-        ax_data.set_ylabel("Frequency (MHz)")
-        self.data_fig.tight_layout()
+        self._apply_clim()
+        self.data_ax.set_title("Cleaned data (from .ucd)")
+        self.data_ax.set_xlabel("Time sample")
+        self.data_ax.set_ylabel("Frequency (MHz)")
+        # Re-pool when the window is resized so the overview matches the new pixel size
+        self.data_canvas.mpl_connect("resize_event", lambda _e: self._schedule_resize())
         self.data_canvas.draw()
+
+    def _schedule_resize(self):
+        """Debounce resize events: re-pool once the window has settled for 150 ms."""
+        if getattr(self, "_resize_job", None) is not None:
+            self.root.after_cancel(self._resize_job)
+        self._resize_job = self.root.after(150, self._on_resize_settled)
+
+    def _on_resize_settled(self):
+        self._resize_job = None
+        self.data_lod.refresh()
+        self.data_canvas.draw_idle()
+
+    def _apply_clim(self):
+        """Push the slider thresholds (in units of STD) to the image."""
+        self._clim_job = None
+        self.data_lod.set_clim(
+            self._data_mean + self.vmin_var.get() * self._data_std,
+            self._data_mean + self.vmax_var.get() * self._data_std,
+        )
+        self.data_canvas.draw_idle()
+
+    def _schedule_clim(self):
+        """Debounce slider drags: redraw once the slider has been still for 40 ms."""
+        if getattr(self, "_clim_job", None) is not None:
+            self.root.after_cancel(self._clim_job)
+        self._clim_job = self.root.after(40, self._apply_clim)
 
     def _on_vmin_change(self, value):
         v = float(value)
@@ -377,7 +423,7 @@ class ShowPulseApp:
         if v >= vmax:
             self.vmin_var.set(round(vmax - 0.1, 1))
             return
-        self._redraw_data_plot()
+        self._schedule_clim()
 
     def _on_vmax_change(self, value):
         v = float(value)
@@ -385,7 +431,11 @@ class ShowPulseApp:
         if v <= vmin:
             self.vmax_var.set(round(vmin + 0.1, 1))
             return
-        self._redraw_data_plot()
+        self._schedule_clim()
+
+    def _on_pool_change(self):
+        self.data_lod.set_method(self.pool_var.get())
+        self.data_canvas.draw_idle()
 
     def _reset(self):
         self.dm = self.dm_init
@@ -429,7 +479,14 @@ class ShowPulseApp:
         self._save_figure_fixed(self.fig,      folder / "individual_pulse_viewer.png")
         print(f"Saved: {folder / 'individual_pulse_viewer.png'}")
 
-        self._save_figure_fixed(self.data_fig, folder / "cleaned_data.png", target_width=32.0)
+        # Re-pool the visible window for the PNG's pixel size, not the screen's
+        data_w, dpi = 32.0, 200
+        fig_w, fig_h = self.data_fig.get_size_inches()
+        pos = self.data_ax.get_position()
+        ax_px = (pos.width * data_w * dpi, pos.height * data_w * (fig_h / fig_w) * dpi)
+        with self.data_lod.render_at(*ax_px):
+            self._save_figure_fixed(self.data_fig, folder / "cleaned_data.png",
+                                    target_width=data_w, dpi=dpi)
         print(f"Saved: {folder / 'cleaned_data.png'}")
 
         if self.trans_app is not None:

@@ -59,6 +59,7 @@ dspz_pipeline/                          # Python package
 ├── gui/                                # Interactive visualization tools
 │   ├── trans_search.py                 # DM-vs-time spectrogram viewer (Tkinter)
 │   ├── show_pulse.py                   # Individual pulse inspector (Tkinter)
+│   ├── lod_image.py                    # Level-of-detail image rendering for large spectrograms
 │   ├── repeating_analysis.py           # FFT periodicity analysis
 │   └── dm_time_plot.py                 # DM-time plane matplotlib plot
 │
@@ -68,6 +69,7 @@ dspz_pipeline/                          # Python package
 _data/                                  # Sample .jds input files
 _output/                                # Generated output files (.ucd, .dmt, plots)
 idl_code/                               # Original IDL source code (for reference)
+tests/                                  # pytest suite (pooling helpers + GUI smoke tests)
 validate.py                             # Utility to compare output against IDL reference
 .vscode/launch.json                     # VSCode debug configurations
 ```
@@ -257,6 +259,24 @@ python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_ B1133p16C231121_
 - **parts / N of parts** -- select time window for FFT analysis
 - **Min/Max scale sliders** -- adjust display contrast
 - **Click on spectrogram** -- select a time point for pulse inspection
+
+**Cleaned data window** (opened together with the pulse viewer) shows the raw cleaned spectrogram
+from the `.ucd` file around the selected pulse (up to 44000 samples x 4096 channels).
+
+Layout: the matplotlib toolbar (home / back / forward / pan / zoom / save) is in the top row;
+the left column holds the **Overview pooling** selector and the **vmax** / **vmin** contrast
+sliders; the plot fills the rest of the window and re-flows when the window is resized or
+maximised.
+
+Rendering: only the currently visible part of the array is drawn, pooled down to screen
+resolution (see `gui/lod_image.py`), so the sliders and toolbar zoom/pan respond in a fraction of a
+second instead of ~10 s, and the current zoom/pan is kept when a slider is moved. When several
+samples fall onto one screen pixel they are combined according to **Overview pooling**:
+`max` (default; narrow pulses and RFI stay visible at any zoom), `mean` (smoother overview) or
+`nearest` (plain sub-sampling, i.e. what plain `imshow` does). Zoom in far enough and the
+individual samples are shown as they are. The slider values are thresholds in units of the data
+STD around its mean and are applied *after* pooling. **Save PNGs** re-renders the visible window
+at the PNG's resolution, not the screen's.
 
 #### Individual pulse viewer (we do not run it separately)
 
@@ -454,6 +474,15 @@ python -c "import tkinter; tkinter._test()"
 ```
 
 
+
+### Running the tests
+
+```bash
+python -m pytest tests
+```
+
+The GUI smoke tests open real Tk windows for a few seconds; they are skipped automatically
+if no display is available.
 
 ### Processing is slow
 
