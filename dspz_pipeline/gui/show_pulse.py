@@ -41,6 +41,22 @@ from dspz_pipeline.gui.lod_image import POOL_METHODS, LodImage
 from dspz_pipeline.utils import smooth_edge
 
 
+def extract_pulse(dat_ucd: np.ndarray, dt: np.ndarray, time_res: float,
+                  sh_t: int, nsf: int) -> np.ndarray:
+    """Gather a ``(n_chan, 2*nsf+1)`` window from each channel, shifted by
+    its dispersion delay ``dt`` (seconds) plus ``sh_t`` samples.
+
+    Vectorised form of the IDL per-channel loop; start indices are clamped
+    so every window lies inside the array.  Returns float64.
+    """
+    n_chan, n_time = dat_ucd.shape
+    win = 2 * nsf + 1
+    stsp = np.rint(dt / time_res).astype(np.int64) + sh_t + nsf   # rint = round-half-even like round()
+    stsp = np.clip(stsp, 0, n_time - win)
+    idx = stsp[:, None] + np.arange(win)[None, :]
+    return dat_ucd[np.arange(n_chan)[:, None], idx].astype(np.float64)
+
+
 class ShowPulseApp:
     """Interactive individual pulse viewer.
 
@@ -253,13 +269,7 @@ class ShowPulseApp:
         dt = compute_dm_delays(self.dm, 33.0, 16.5, wofsg, 16.5 / wofsg)
 
         # Build the pulse array: shift each freq channel by the delay
-        pulse = np.zeros((wofsg, 2 * nsf + 1), dtype=np.float64)
-        for j in range(wofsg):
-            stsp = int(round(dt[j] / self.time_res)) + self.sh_t + nsf
-            stsp = max(0, min(stsp, self.dat_ucd.shape[1] - 2 * nsf - 1))
-            end = stsp + 2 * nsf + 1
-            if end <= self.dat_ucd.shape[1]:
-                pulse[j, :] = self.dat_ucd[j, stsp:end]
+        pulse = extract_pulse(self.dat_ucd, dt, self.time_res, self.sh_t, nsf)
 
         # Create ax_img first so ax_spec can share its Y axis
         ax_img = self.fig.add_subplot(2, 2, 2)
@@ -300,9 +310,7 @@ class ShowPulseApp:
         ax_spec.set_title(f"Spectrum of pulse (Bandwidth: {band_khz:.1f} kHz)")
 
         # --- Ax 3: Pulse image -------------------------------------------- #
-        pulse_sm = pulse.copy()
-        for j in range(wofsg):
-            pulse_sm[j, :] = smooth_edge(pulse[j, :], self.smpar)
+        pulse_sm = smooth_edge(pulse, self.smpar)
 
         # --- Ax 4: Pulse profile (smoothed, total) ----------------------- #
         ax_prof = self.fig.add_subplot(2, 2, 3)

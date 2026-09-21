@@ -47,11 +47,8 @@ def _compute_accDM(acc_dm_file, dm_stepnumb, picsize, smpar, smpar_background):
     IDL: accDM[j,*] = smooth(accDMfile[j,*], smpar, /EDG)
                      - smooth(accDMfile[j,*], smpar_background, /EDG)
     """
-    acc_dm = np.zeros_like(acc_dm_file)
-    for j in range(dm_stepnumb):
-        row = acc_dm_file[j, :]
-        acc_dm[j, :] = smooth_edge(row, smpar) - smooth_edge(row, smpar_background)
-    return acc_dm
+    # smooth_edge works along the last axis, so all DM rows go in one call
+    return smooth_edge(acc_dm_file, smpar) - smooth_edge(acc_dm_file, smpar_background)
 
 
 class TransSearchApp:
@@ -178,6 +175,12 @@ class TransSearchApp:
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=True)
         self.canvas.mpl_connect("button_press_event", self._on_click)
 
+        # Per-panel artists, created once by _build_panels() and updated in place
+        self.panel_axes: list = []
+        self.panel_images: list = []
+        self.panel_spans: list = []
+        self._redraw_job = None
+
     # ------------------------------------------------------------------ #
     #  Computation
     # ------------------------------------------------------------------ #
@@ -211,9 +214,45 @@ class TransSearchApp:
     #  Drawing
     # ------------------------------------------------------------------ #
 
-    def _redraw(self):
-        """Redraw the 16-strip spectrogram display."""
+    def _build_panels(self):
+        """Create the 16 strip axes and their images once.
+
+        Rebuilding the figure on every change costs ~1 s (mostly matplotlib
+        tick machinery); updating the existing artists costs ~0.1 s.
+        """
         self.fig.clear()
+        self.panel_axes, self.panel_images, self.panel_spans = [], [], []
+        kadr, n_panels = self.KADR, self.N_PANELS
+
+        for np_idx in range(n_panels):
+            ax = self.fig.add_subplot(n_panels, 1, n_panels - np_idx)
+            t_start = kadr * np_idx
+            t_end = min((np_idx + 1) * kadr, self.picsize)
+            im = ax.imshow(
+                self.acc_dm_norm[:, t_start:t_end],
+                aspect="auto",
+                origin="lower",
+                cmap="gray_r",
+                vmin=self.minscl,
+                vmax=self.maxscl,
+                extent=[t_start, t_end, 0, self.dm_stepnumb],
+                interpolation="nearest",
+            )
+            ax.set_ylabel(f"P{np_idx}", fontsize=7, rotation=0, labelpad=15)
+            ax.tick_params(labelsize=6)
+            if np_idx > 0:
+                ax.set_xticklabels([])
+            self.panel_axes.append(ax)
+            self.panel_images.append(im)
+            self.panel_spans.append(None)
+
+        self.fig.suptitle(self._title_text(), fontsize=9)
+        self.fig.subplots_adjust(hspace=0, top=0.96, bottom=0.03, left=0.05, right=0.98)
+
+    def _redraw(self):
+        """Update the 16-strip spectrogram display in place."""
+        if not self.panel_images:
+            self._build_panels()
 
         kadr = self.KADR
         n_panels = self.N_PANELS
@@ -239,45 +278,26 @@ class TransSearchApp:
         if viz_end > viz_start:
             self.p_viz[viz_start:viz_end] = 200.0
 
-        for np_idx in range(n_panels):
-            ax = self.fig.add_subplot(n_panels, 1, n_panels - np_idx)
-
+        for np_idx, (ax, im) in enumerate(zip(self.panel_axes, self.panel_images)):
             t_start = kadr * np_idx
-            t_end = (np_idx + 1) * kadr
-            if t_end > self.picsize:
-                t_end = self.picsize
+            t_end = min((np_idx + 1) * kadr, self.picsize)
 
-            chunk = self.acc_dm_norm[:, t_start:t_end]
-
-            # Clip to scale range (IDL: >minscl<maxscl)
-            display = np.clip(chunk, minscl, maxscl)
-
-            ax.imshow(
-                display,
-                aspect="auto",
-                origin="lower",
-                cmap="gray_r",
-                vmin=minscl,
-                vmax=maxscl,
-                extent=[t_start, t_end, 0, self.dm_stepnumb],
-                interpolation="nearest",
-            )
+            # Clipping to [minscl, maxscl] is what the colour limits do (IDL: >minscl<maxscl)
+            im.set_data(self.acc_dm_norm[:, t_start:t_end])
+            im.set_clim(minscl, maxscl)
 
             # Mark the active part with a coloured overlay on the left
+            if self.panel_spans[np_idx] is not None:
+                self.panel_spans[np_idx].remove()
+                self.panel_spans[np_idx] = None
             if viz_start <= t_end and viz_end >= t_start:
-                ax.axvspan(
+                self.panel_spans[np_idx] = ax.axvspan(
                     max(t_start, viz_start), min(t_end, viz_end),
                     alpha=0.15, color="yellow", zorder=2,
                 )
 
-            ax.set_ylabel(f"P{np_idx}", fontsize=7, rotation=0, labelpad=15)
-            ax.tick_params(labelsize=6)
-            if np_idx > 0:
-                ax.set_xticklabels([])
-
         self.fig.suptitle(self._title_text(), fontsize=9)
-        self.fig.subplots_adjust(hspace=0, top=0.96, bottom=0.03, left=0.05, right=0.98)
-        self.canvas.draw()
+        self.canvas.draw_idle()
 
     # ------------------------------------------------------------------ #
     #  Control callbacks
@@ -352,6 +372,13 @@ class TransSearchApp:
     def _on_scale_change(self, _val=None):
         self.minscl = float(self.scl_min.get())
         self.maxscl = float(self.scl_max.get())
+        # Debounce slider drags: redraw once the slider has been still for 40 ms
+        if self._redraw_job is not None:
+            self.root.after_cancel(self._redraw_job)
+        self._redraw_job = self.root.after(40, self._redraw_from_slider)
+
+    def _redraw_from_slider(self):
+        self._redraw_job = None
         self._redraw()
 
     # ------------------------------------------------------------------ #
