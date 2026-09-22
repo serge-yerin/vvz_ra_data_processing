@@ -206,6 +206,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
     # frames, keeps a bounded number in flight, and appends the results to
     # the .ucd strictly in frame order.
     pbar = tqdm(total=total_frames, desc="  Cleaning", unit="frame", dynamic_ncols=True)
+    # Plain print() would land in the middle of the progress bar (the bar
+    # redraws on stderr, print writes to stdout, and the two interleave);
+    # tqdm.write clears the bar, prints the line, then redraws the bar.
+    say = pbar.write
     pool = ProcessPoolExecutor(max_workers=workers) if workers > 1 else None
     max_inflight = 2 * workers
     pending: deque = deque()
@@ -222,18 +226,18 @@ def run_pipeline(args: argparse.Namespace) -> None:
         try:
             for n_file in range(n_in_list):
                 jds_path = jds_files[n_file]
-                print(f"\n--- File {n_file + 1} of {n_in_list}: {jds_path.name} ---")
+                say(f"\n--- File {n_file + 1} of {n_in_list}: {jds_path.name} ---")
 
                 with JdsFile(jds_path, nofs=args.nofs) as jds:
                     hdr = jds.header
-                    print(f"  Name:  {hdr.sname}")
-                    print(f"  Local: {hdr.stime}")
-                    print(f"  UTC:   {hdr.sgmtt}")
-                    print(f"  Mode:  {'waveform' if hdr.data_mode == 0 else 'spectra' if hdr.data_mode == 1 else 'correlation'}")
-                    print(f"  Fmin: {hdr.fmin_mhz:.1f} MHz,  Fmax: {hdr.fmax_mhz:.1f} MHz,  "
-                          f"wofsg: {hdr.wofsg},  avrs: {hdr.avrs},  "
-                          f"Time resolution: {hdr.time_res_s * 1000:.3f} ms")
-                    print(f"  Total number of frames in file: {jds.nframe}")
+                    say(f"  Name:  {hdr.sname}")
+                    say(f"  Local: {hdr.stime}")
+                    say(f"  UTC:   {hdr.sgmtt}")
+                    say(f"  Mode:  {'waveform' if hdr.data_mode == 0 else 'spectra' if hdr.data_mode == 1 else 'correlation'}")
+                    say(f"  Fmin: {hdr.fmin_mhz:.1f} MHz,  Fmax: {hdr.fmax_mhz:.1f} MHz,  "
+                        f"wofsg: {hdr.wofsg},  avrs: {hdr.avrs},  "
+                        f"Time resolution: {hdr.time_res_s * 1000:.3f} ms")
+                    say(f"  Total number of frames in file: {jds.nframe}")
 
                     for _i, raw_bytes in jds.raw_frames():
                         global_frame += 1

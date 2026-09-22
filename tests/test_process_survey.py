@@ -61,3 +61,11 @@ def test_parallel_output_identical_to_sequential(tmp_path):
 def test_workers_default_is_positive():
     args = parse_args(["--files", "x.jds"])
     assert args.workers >= 1
+
+
+def test_file_headers_printed_once_through_the_progress_bar(tmp_path, capsys):
+    _run(tmp_path, "hdr", workers=1)
+    out = capsys.readouterr().out
+    assert out.count("--- File 1 of 2: a.jds ---") == 1
+    assert out.count("--- File 2 of 2: b.jds ---") == 1
+    assert out.count("Total number of frames in file:") == 2
