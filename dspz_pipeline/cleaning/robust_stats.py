@@ -41,9 +41,12 @@ def erov(data: np.ndarray) -> tuple[float, float]:
 
     sr = np.mean(m)
     count = m.size
+    # Sigma of the current survivors; after the first pass this is simply the
+    # ``ster`` computed at the end of the previous iteration (same array), so
+    # it is carried over instead of being recomputed.
+    srkv = np.std(m, ddof=1)
 
     while True:
-        srkv = np.std(m, ddof=1) if m.size > 1 else 0.0
         count_pr = count
         sr_pr = sr
 
@@ -62,6 +65,7 @@ def erov(data: np.ndarray) -> tuple[float, float]:
         m = m[m_in]
         sr = np.mean(m)
         ster = np.std(m, ddof=1) if m.size > 1 else 0.0
+        srkv = ster
 
         # Convergence check (IDL: abs(sr_pr/sr - 1) lt 1e-5 or count_pr eq count)
         if sr == 0.0:

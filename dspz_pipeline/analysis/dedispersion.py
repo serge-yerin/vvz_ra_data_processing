@@ -23,6 +23,33 @@ from dspz_pipeline.io.dmt import compute_dm_delays, write_dmt
 from dspz_pipeline.io.jds_reader import read_ucd_header
 
 
+def dedisperse(data: np.ndarray, shifts: np.ndarray) -> np.ndarray:
+    """Shift-and-sum all channels for one DM.
+
+    Parameters
+    ----------
+    data : np.ndarray, shape (wofsg, picsize), float32, C-contiguous
+        Channel-major spectrogram (each row is one channel's time series).
+    shifts : np.ndarray, shape (wofsg,), int
+        Delay of each channel in samples.
+
+    Returns
+    -------
+    np.ndarray, shape (picsize,), float32
+        Dedispersed time series.  Accumulated in float64 channel by channel
+        in the same order as the original IDL loop, so the result is
+        bit-identical to it.
+    """
+    wofsg, picsize = data.shape
+    dedispersed = np.zeros(picsize, dtype=np.float64)
+    for ch in range(wofsg):
+        s = int(shifts[ch])
+        if s >= picsize:
+            continue
+        dedispersed[:picsize - s] += data[ch, s:]
+    return dedispersed.astype(np.float32)
+
+
 def ind_search(
     ucd_path: str | Path,
     dm_const: float,
@@ -73,12 +100,16 @@ def ind_search(
           f"[{dm_const - DM_HALF_STEPS * DM_STEP_SIZE:.3f}, "
           f"{dm_const + DM_HALF_STEPS * DM_STEP_SIZE:.3f}] \n")
 
-    # Memory-map the .ucd data (skip 1024-byte header)
-    ucd_data = np.memmap(
-        ucd_path, dtype=np.float32, mode="r",
-        offset=HEADER_SIZE_BYTES,
-        shape=(picsize, wofsg),
-    )
+    # Load the .ucd data (skip 1024-byte header) and make it channel-major.
+    # The file is time-major, so reading channels as columns of a memmap
+    # touches the whole file once per channel (4096 passes over ~2 GB);
+    # one transpose in RAM makes every channel a contiguous row instead.
+    ucd_data = np.fromfile(
+        ucd_path, dtype=np.float32, offset=HEADER_SIZE_BYTES,
+        count=picsize * wofsg,
+    ).reshape(picsize, wofsg)
+    data = np.ascontiguousarray(ucd_data.T)
+    del ucd_data
 
     # Allocate output: (DMstepnumb, picsize)
     dm_stepnumb = DM_TOTAL_STEPS
@@ -93,14 +124,7 @@ def ind_search(
         max_shift = int(np.max(shifts))
 
         # Dedisperse: shift each frequency channel and sum
-        dedispersed = np.zeros(picsize, dtype=np.float64)
-        for ch in range(wofsg):
-            s = int(shifts[ch])
-            if s >= picsize:
-                continue
-            dedispersed[:picsize - s] += ucd_data[s:, ch].astype(np.float64)
-
-        acc_dm[j, :] = dedispersed.astype(np.float32)
+        acc_dm[j, :] = dedisperse(data, shifts)
 
         if (j + 1) % 10 == 0 or j == 0 or j == dm_stepnumb - 1:
             print(f"  DM step {j + 1}/{dm_stepnumb}: DM={dm:.3f} pc/cm^3, "

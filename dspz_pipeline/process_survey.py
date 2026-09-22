@@ -23,7 +23,10 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import os
 import sys
+from collections import deque
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from tqdm import tqdm
@@ -42,8 +45,35 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 
 from dspz_pipeline.analysis.dedispersion import ind_search
-from dspz_pipeline.io.jds_reader import JdsFile, write_ucd_header
+from dspz_pipeline.io.jds_reader import JdsFile, decode_raw_frame, write_ucd_header
 from dspz_pipeline.cleaning.rfi_cleaning import adr_cleaning
+
+
+def default_workers() -> int:
+    """Leave one core for the reader/writer process; cap at 8."""
+    return max(1, min(8, (os.cpu_count() or 2) - 1))
+
+
+def clean_frame_task(
+    raw_bytes: bytes,
+    wofsg: int,
+    nofs: int,
+    avrs: int,
+    mode: int,
+    png_args: tuple | None,
+) -> bytes:
+    """Decode + clean one frame; optionally save its PNG.
+
+    Runs in a worker process (frames are independent) and returns the
+    cleaned frame as float32 bytes in Fortran order, ready to append to
+    the .ucd file.
+    """
+    imdat = decode_raw_frame(raw_bytes, wofsg, nofs, avrs, mode)
+    imdat, mask = adr_cleaning(imdat, pat=True, nar=True, wid=True)
+    if png_args is not None:
+        ucd_path, frame_num, total_frames = png_args
+        save_frame_png(imdat, mask, Path(ucd_path), frame_num, total_frames)
+    return imdat.astype(np.float32).tobytes(order="F")
 
 
 def save_frame_png(imdat, mask, ucd_path: Path, frame_num: int, total_frames: int) -> None:
@@ -130,6 +160,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--save_cleaning_mask", action="store_true",
         help="Save PNG images of the cleaned data and RFI mask for each frame.",
     )
+    p.add_argument(
+        "--workers", type=int, default=default_workers(),
+        help="Worker processes for RFI cleaning; 1 = sequential in this process "
+             f"(default: {default_workers()}).",
+    )
     return p.parse_args(argv)
 
 
@@ -150,15 +185,13 @@ def run_pipeline(args: argparse.Namespace) -> None:
     with JdsFile(jds_files[0], nofs=args.nofs) as jds0:
         first_header = jds0.header
 
-    # Pre-compute total frame count across all JDS files (for PNG naming/padding)
+    # Total frame count across all JDS files (progress bar, PNG naming/padding)
+    total_frames = 0
+    for jds_path in jds_files:
+        with JdsFile(jds_path, nofs=args.nofs) as jds:
+            total_frames += jds.nframe
     if args.save_cleaning_mask:
         print(f"\nImages of data and RFI mask will be saved for each frame. !!! This may take additional time !!!\n")
-        total_frames = 0
-        for jds_path in jds_files:
-            with JdsFile(jds_path, nofs=args.nofs) as jds:
-                total_frames += jds.nframe
-    else:
-        total_frames = 0
 
     # Construct output filename (matches IDL convention)
     cleaned_filename = outdir / f"Cleaned_ {args.label}{shortnames[0]}.ucd"
@@ -166,46 +199,62 @@ def run_pipeline(args: argparse.Namespace) -> None:
     # Write .ucd header (copy of .jds header with nofs patched)
     write_ucd_header(cleaned_filename, first_header, args.nofs)
 
-    # Open .ucd for appending data after the header
-    ucd_fh = open(cleaned_filename, "ab")
+    workers = max(1, args.workers)
+    print(f"\nRFI cleaning with {workers} worker process(es)")
+
+    # Frames are cleaned in worker processes; the main process reads raw
+    # frames, keeps a bounded number in flight, and appends the results to
+    # the .ucd strictly in frame order.
+    pbar = tqdm(total=total_frames, desc="  Cleaning", unit="frame", dynamic_ncols=True)
+    pool = ProcessPoolExecutor(max_workers=workers) if workers > 1 else None
+    max_inflight = 2 * workers
+    pending: deque = deque()
     global_frame = 0
 
-    try:
-        for n_file in range(n_in_list):
-            jds_path = jds_files[n_file]
-            print(f"\n--- File {n_file + 1} of {n_in_list}: {jds_path.name} ---")
+    def submit(task_args):
+        """Return a zero-arg callable that yields the cleaned frame bytes."""
+        if pool is None:
+            result = clean_frame_task(*task_args)
+            return lambda: result
+        return pool.submit(clean_frame_task, *task_args).result
 
-            with JdsFile(jds_path, nofs=args.nofs) as jds:
-                hdr = jds.header
-                print(f"  Name:  {hdr.sname}")
-                print(f"  Local: {hdr.stime}")
-                print(f"  UTC:   {hdr.sgmtt}")
-                print(f"  Mode:  {'waveform' if hdr.data_mode == 0 else 'spectra' if hdr.data_mode == 1 else 'correlation'}")
-                print(f"  Fmin: {hdr.fmin_mhz:.1f} MHz,  Fmax: {hdr.fmax_mhz:.1f} MHz,  "
-                      f"wofsg: {hdr.wofsg},  avrs: {hdr.avrs},  "
-                      f"Time resolution: {hdr.time_res_s * 1000:.3f} ms")
-                print(f"  Total number of frames in file: {jds.nframe}")
+    with open(cleaned_filename, "ab") as ucd_fh:
+        try:
+            for n_file in range(n_in_list):
+                jds_path = jds_files[n_file]
+                print(f"\n--- File {n_file + 1} of {n_in_list}: {jds_path.name} ---")
 
-                pbar = tqdm(
-                    jds.frames(mode=args.mode),
-                    total=jds.nframe,
-                    desc=f"  File {n_file + 1} / {n_in_list}",
-                    unit="frame",
-                    dynamic_ncols=True,
-                )
-                for i, imdat in pbar:
-                    # Clean the frame
-                    imdat, mask = adr_cleaning(imdat, pat=True, nar=True, wid=True)
+                with JdsFile(jds_path, nofs=args.nofs) as jds:
+                    hdr = jds.header
+                    print(f"  Name:  {hdr.sname}")
+                    print(f"  Local: {hdr.stime}")
+                    print(f"  UTC:   {hdr.sgmtt}")
+                    print(f"  Mode:  {'waveform' if hdr.data_mode == 0 else 'spectra' if hdr.data_mode == 1 else 'correlation'}")
+                    print(f"  Fmin: {hdr.fmin_mhz:.1f} MHz,  Fmax: {hdr.fmax_mhz:.1f} MHz,  "
+                          f"wofsg: {hdr.wofsg},  avrs: {hdr.avrs},  "
+                          f"Time resolution: {hdr.time_res_s * 1000:.3f} ms")
+                    print(f"  Total number of frames in file: {jds.nframe}")
 
-                    # Write cleaned data as float32 to .ucd
-                    ucd_fh.write(imdat.astype(np.float32).tobytes(order="F"))
+                    for _i, raw_bytes in jds.raw_frames():
+                        global_frame += 1
+                        png_args = (
+                            (str(cleaned_filename), global_frame, total_frames)
+                            if args.save_cleaning_mask else None
+                        )
+                        pending.append(submit(
+                            (raw_bytes, hdr.wofsg, args.nofs, hdr.avrs, args.mode, png_args)
+                        ))
+                        while len(pending) >= max_inflight:
+                            ucd_fh.write(pending.popleft()())
+                            pbar.update(1)
 
-                    global_frame += 1
-                    if args.save_cleaning_mask:
-                        save_frame_png(imdat, mask, cleaned_filename, global_frame, total_frames)
-
-    finally:
-        ucd_fh.close()
+            while pending:
+                ucd_fh.write(pending.popleft()())
+                pbar.update(1)
+        finally:
+            pbar.close()
+            if pool is not None:
+                pool.shutdown(wait=True, cancel_futures=True)
 
     print(f"\nCleaned data written to: {cleaned_filename}")
 

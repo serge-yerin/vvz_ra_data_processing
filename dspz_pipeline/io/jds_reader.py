@@ -148,17 +148,22 @@ def decode_dspz_frame(
     imdat : np.ndarray, dtype float64, shape (wofsg, nofs)
         Decoded spectrogram.
     """
-    # Decode custom float: bits 5-31 = mantissa, bits 0-4 = exponent
-    mant = (raw & MANTISSA_MASK).astype(np.float64)
-    expn = (raw & EXPONENT_MASK).astype(np.int32)
-    data = mant / np.power(2.0, expn) * DECODE_SCALE / avrs
+    # Decode custom float: bits 5-31 = mantissa, bits 0-4 = exponent.
+    # Only the channel(s) the mode needs are decoded.  ldexp(mant, -expn) is
+    # mant / 2**expn computed exactly (power-of-two scaling), so the result
+    # is bit-identical to the original ``mant / np.power(2.0, expn)``.
+    def _decode(ch: np.ndarray) -> np.ndarray:
+        ch = np.ascontiguousarray(ch)
+        mant = (ch & MANTISSA_MASK).astype(np.float64)
+        expn = (ch & EXPONENT_MASK).astype(np.int32)
+        return np.ldexp(mant, -expn) * DECODE_SCALE / avrs
 
     if mode == 0:
-        imdat = data[0, :, :] - data[1, :, :]
+        imdat = _decode(raw[0]) - _decode(raw[1])
     elif mode == 1:
-        imdat = data[0, :, :]
+        imdat = _decode(raw[0])
     else:
-        imdat = data[1, :, :]
+        imdat = _decode(raw[1])
 
     return imdat.reshape(wofsg, nofs)
 
@@ -220,11 +225,31 @@ class JdsFile:
             raw_bytes = self._fh.read(frame_bytes)
             if len(raw_bytes) < frame_bytes:
                 break
-            raw = np.frombuffer(raw_bytes, dtype=np.uint32).reshape(nofs, wofsg, 2)
-            # IDL layout is (2, wofsg, nofs) in column-major = (nofs, wofsg, 2)
-            # in C-order.  We need (2, wofsg, nofs):
-            raw = raw.transpose(2, 1, 0).copy()
-            yield i, decode_dspz_frame(raw, wofsg, nofs, avrs, mode)
+            yield i, decode_raw_frame(raw_bytes, wofsg, nofs, avrs, mode)
+
+    def raw_frames(self) -> Iterator[tuple[int, bytes]]:
+        """Yield ``(frame_index, raw_bytes)`` for each frame, undecoded.
+
+        Used by the parallel pipeline, which decodes in worker processes
+        (see :func:`decode_raw_frame`).
+        """
+        frame_bytes = 4 * self.nofs * self.header.wofsg * 2
+        self._fh.seek(HEADER_SIZE_BYTES)
+        for i in range(self.nframe):
+            raw_bytes = self._fh.read(frame_bytes)
+            if len(raw_bytes) < frame_bytes:
+                break
+            yield i, raw_bytes
+
+
+def decode_raw_frame(raw_bytes: bytes, wofsg: int, nofs: int, avrs: int, mode: int) -> np.ndarray:
+    """Decode one frame straight from its file bytes.
+
+    IDL layout is (2, wofsg, nofs) in column-major, i.e. (nofs, wofsg, 2)
+    in C order; the transpose is a view, no copy.
+    """
+    raw = np.frombuffer(raw_bytes, dtype=np.uint32).reshape(nofs, wofsg, 2)
+    return decode_dspz_frame(raw.transpose(2, 1, 0), wofsg, nofs, avrs, mode)
 
 
 def write_ucd_header(

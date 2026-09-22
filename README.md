@@ -124,8 +124,13 @@ python -m dspz_pipeline.process_survey --indir _data_1133 --files C231121_032738
 - Writes dedispersed data to `_output_XXXX/Cleaned_XXXXXXXXXXXX.jds.ucd.dmt`
 - Launches the interactive Transient Search GUI to analyze dedispersed data array
 
-**Expected runtime:** ~7 minutes per file (128 frames total for 2 files),
-plus ~10 minutes for dedispersion. Progress is printed to the console.
+**Expected runtime:** about 3-4 minutes for two 2 GB files (128 frames) on an
+8-core machine, including dedispersion. Frames are cleaned in parallel worker
+processes (`--workers`, default: number of cores minus one, capped at 8); each
+frame is processed exactly as in the sequential version, so the output is
+byte-identical regardless of the worker count. Use `--workers 1` to run
+everything in a single process (about 6 s per frame plus ~30 s dedispersion).
+Progress is printed to the console.
 
 Add `--no-gui` to skip the GUI and just produce the output files.
 
@@ -328,6 +333,7 @@ python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_0320
 | `--nofs`    | `1024`          | Spectra per frame                              |
 | `--no-gui`  | (flag)          | Skip launching the interactive GUI             |
 | `--save_cleaning_mask` | (flag) | Save PNG images of cleaned data and RFI mask for each frame (see below) |
+| `--workers` | cores - 1 (max 8) | Worker processes for RFI cleaning; `1` = sequential |
 
 ### indsearch_main (Individual Search)
 
@@ -491,9 +497,11 @@ if no display is available.
 
 ### Processing is slow
 
-**Full pipeline:** The RFI cleaning step processes ~6 seconds per frame. For two
-2 GB files (128 frames), expect ~13 minutes for cleaning plus ~10 minutes
-for dedispersion.
+**Full pipeline:** RFI cleaning takes ~6 s of CPU per frame, but frames are
+cleaned in parallel (`--workers`), so two 2 GB files (128 frames) take ~3 min
+on 8 workers plus ~30 s for dedispersion. If the machine has few cores or
+little RAM (each worker needs ~250 MB; dedispersion holds the whole `.ucd`,
+~2 GB, in memory), lower `--workers`.
 
 **Individual Search:** IndSearch processes 51 DM steps (by default) x 8 subbands, reading all frames for each combination. Runtime depends on file size and disk speed.
 
