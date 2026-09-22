@@ -193,8 +193,8 @@ def run_pipeline(args: argparse.Namespace) -> None:
     if args.save_cleaning_mask:
         print(f"\nImages of data and RFI mask will be saved for each frame. !!! This may take additional time !!!\n")
 
-    # Construct output filename (matches IDL convention)
-    cleaned_filename = outdir / f"Cleaned_ {args.label}{shortnames[0]}.ucd"
+    # Output name: Cleaned_<label>_<first input file>.ucd
+    cleaned_filename = outdir / f"Cleaned_{args.label}_{shortnames[0]}.ucd"
 
     # Write .ucd header (copy of .jds header with nofs patched)
     write_ucd_header(cleaned_filename, first_header, args.nofs)

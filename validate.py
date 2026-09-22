@@ -138,9 +138,9 @@ def compare_dmt_files(our_path, ref_path):
 
 
 def main():
-    our_ucd = "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd"
+    our_ucd = "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd"
     ref_ucd = "sample_inter/Cleaned_ PSRB0834p06A141010_032001.jds.ucd"
-    our_dmt = "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt"
+    our_dmt = "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd.dmt"
     ref_dmt = "sample_inter/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt"
 
     results = []

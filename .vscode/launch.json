@@ -38,7 +38,7 @@
             "request": "launch",
             "module": "dspz_pipeline.gui.trans_search",
             "args": [
-                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt",
+                "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd.dmt",
                 "12.872"
             ],
             "cwd": "${workspaceFolder}",
@@ -51,7 +51,7 @@
             "request": "launch",
             "module": "dspz_pipeline.gui.show_pulse",
             "args": [
-                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd",
+                "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd",
                 "12.872",
                 "--ns", "32768"
             ],
@@ -65,7 +65,7 @@
             "request": "launch",
             "module": "dspz_pipeline.gui.repeating_analysis",
             "args": [
-                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt",
+                "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd.dmt",
                 "12.872"
             ],
             "cwd": "${workspaceFolder}",
@@ -78,7 +78,7 @@
             "request": "launch",
             "module": "dspz_pipeline.indsearch_main",
             "args": [
-                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd",
+                "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd",
                 "12.872"
             ],
             "cwd": "${workspaceFolder}",
@@ -91,7 +91,7 @@
             "request": "launch",
             "module": "dspz_pipeline.indsearch_main",
             "args": [
-                "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd",
+                "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd",
                 "12.872",
                 "--no-plot"
             ],

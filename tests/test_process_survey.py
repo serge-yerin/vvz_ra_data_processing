@@ -45,7 +45,7 @@ def _run(tmp_path, tag, workers, save_png=False):
     if save_png:
         argv.append("--save_cleaning_mask")
     run_pipeline(parse_args(argv))
-    return outdir / "Cleaned_ Ta.jds.ucd", outdir / "Cleaned_ Ta.jds.ucd.dmt"
+    return outdir / "Cleaned_T_a.jds.ucd", outdir / "Cleaned_T_a.jds.ucd.dmt"
 
 
 def test_parallel_output_identical_to_sequential(tmp_path):

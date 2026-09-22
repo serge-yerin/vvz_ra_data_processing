@@ -119,22 +119,71 @@ python -m dspz_pipeline.process_survey --indir _data_1133 --files C231121_032738
 - Decodes the DSPZ binary format
 - Cleans (removes RFI) and normalizes response in each frame 
 - Saves images of masks and cleaned data if `--save_cleaning_mask` flag applied 
-- Writes the cleaned data to `_output_XXXX/Cleaned_XXXXXXXXXXXX.jds.ucd`
+- Writes the cleaned data to `_output_XXXX/Cleaned_<label>_<first .jds file>.ucd`
 - Runs incoherent dedispersion over 51 DM trial values
-- Writes dedispersed data to `_output_XXXX/Cleaned_XXXXXXXXXXXX.jds.ucd.dmt`
+- Writes dedispersed data to `_output_XXXX/Cleaned_<label>_<first .jds file>.ucd.dmt`
 - Launches the interactive Transient Search GUI to analyze dedispersed data array
 
 **Expected runtime:** about 3-4 minutes for two 2 GB files (128 frames) on an
-8-core machine, including dedispersion. Frames are cleaned in parallel worker
-processes (`--workers`, default: number of cores minus one, capped at 8); each
-frame is processed exactly as in the sequential version, so the output is
-byte-identical regardless of the worker count. Use `--workers 1` to run
-everything in a single process (about 6 s per frame plus ~30 s dedispersion).
-Progress is printed to the console.
+8-core machine with the default `--workers`, including dedispersion
+(see *Parallel cleaning* below). Progress is printed to the console.
 
 Add `--no-gui` to skip the GUI and just produce the output files.
 
 Add `--save_cleaning_mask` to save a PNG image of the cleaned data and RFI mask for every frame. Images are stored in a subfolder next to the `.ucd` file, named after the `.ucd` file (without extension). Each PNG is named `<ucd_stem>_NNN.png` (zero-padded by total frame count) and shows the Data and Mask arrays side-by-side with a Greys colormap. By default this is off to avoid the extra I/O overhead during processing.
+
+#### Parallel cleaning: the `--workers` option
+
+RFI cleaning is by far the most expensive step (~6 s of CPU per 1024-spectra
+frame, i.e. ~13 min of CPU for two 2 GB files). Every frame is cleaned
+independently of the others, so the pipeline cleans several frames at the
+same time in separate **worker processes**:
+
+- The main process reads the `.jds` files frame by frame and hands each raw
+  frame to a worker. A worker decodes the frame, cleans it and (with
+  `--save_cleaning_mask`) renders its PNG.
+- The main process collects the results and appends them to the `.ucd` file
+  **strictly in frame order**, keeping at most `2 x workers` frames in flight.
+- Each frame goes through exactly the same code as in a single-process run,
+  so **the `.ucd` and `.dmt` files are byte-identical for any value of
+  `--workers`**. The option only changes how long the run takes.
+- The following dedispersion step runs in the main process only; it is
+  fast (~30 s) and not affected by `--workers`.
+
+**Default:** number of CPU cores minus one (one core stays free for the
+reading/writing main process and the OS), capped at 8. The value used is
+printed at the start of the run (`RFI cleaning with N worker process(es)`).
+
+**How to choose the value for your machine:**
+
+| Situation | Recommended `--workers` |
+|---|---|
+| Typical desktop / laptop, 8+ cores, 16+ GB RAM | leave the default |
+| 4 cores | `3` (the default gives this automatically) |
+| 2 cores or a busy shared machine | `1` or `2` |
+| Little RAM (8 GB or less) | `2`-`4`; watch memory use |
+| Debugging, profiling, or a `MemoryError` / very slow run | `1` (sequential, no worker processes at all) |
+
+**Memory:** each worker needs roughly **250 MB** while cleaning a frame (raw
+frame + decoded float64 copy + intermediate arrays), or about **450 MB** with
+`--save_cleaning_mask` (PNG rendering). In addition, dedispersion loads the
+whole `.ucd` file into RAM (**~2 GB** for two 2 GB input files),
+independently of `--workers`. So a run with 8 workers and PNGs needs roughly
+8 x 0.45 + 2 = ~5.6 GB of free RAM at peak; if the machine starts swapping
+(disk light on, run much slower than expected) or Python raises
+`MemoryError`, lower `--workers`.
+
+**CPU:** more workers than physical cores does not help; the cleaning is pure
+CPU work. On a laptop, many workers may also trigger thermal throttling; if
+the run is slower than expected, try one or two fewer.
+
+**Speed-up is not perfectly linear:** the reader/writer and the operating
+system need some CPU too, and PNG rendering adds ~1.7 s per frame of work to
+the workers. Expect roughly 6 s / `workers` per frame overall.
+
+`--workers 1` runs the cleaning inside the main process without creating any
+worker processes. Use it when in doubt: it is the simplest configuration,
+needs the least memory, and produces the same files (just slower).
 
 
 
@@ -145,9 +194,9 @@ The last step of full pipeline that can be runned separately on calculated .dmt 
 To run use command:
 
 ```bash
-python -m dspz_pipeline.gui.trans_search "_output_0834/Cleaned_ B0834p06A141010_032001.jds.ucd.dmt" 12.872
+python -m dspz_pipeline.gui.trans_search "_output_0834/Cleaned_B0834p06_A141010_032001.jds.ucd.dmt" 12.872
 
-python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd.dmt" 4.8471
+python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_B1133p16_C231121_032738.jds.ucd.dmt" 4.8471
 ```
 
 #### Graphic User Interface description
@@ -211,7 +260,7 @@ To run both stages sequentially from raw data to final analysis:
 python -m dspz_pipeline.process_survey --indir _data --files A141010_032001.jds A141010_032843.jds --dm 12.872 --label "PSRB0834p06" --outdir _output --no-gui
 
 # Individual Search run IndSearch dedispersion on the .ucd output
-python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.872
+python -m dspz_pipeline.indsearch_main "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd" 12.872
 ```
 
 
@@ -220,9 +269,9 @@ python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_0320
 ### Individual Search dedispersion (.ucd to .dmt)
 
 ```bash
-python -m dspz_pipeline.indsearch_main "_output_0834/Cleaned_ B0834p06A141010_032001.jds.ucd"  12.872
+python -m dspz_pipeline.indsearch_main "_output_0834/Cleaned_B0834p06_A141010_032001.jds.ucd"  12.872
 
-python -m dspz_pipeline.indsearch_main "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd"  4.8471
+python -m dspz_pipeline.indsearch_main "_output_1133/Cleaned_B1133p16_C231121_032738.jds.ucd"  4.8471
 ```
 
 **What it does:**
@@ -238,9 +287,9 @@ It makes a dedisperion of the data in a range of DM points and shows the full da
 If you already have a `.dmt` file and want to (re-)plot it without rerunning dedispersion:
 
 ```bash
-python -m dspz_pipeline.gui.dm_time_plot "_output_0834/Cleaned_ B0834p06A141010_032001.jds.ucd.dmt" 12.872
+python -m dspz_pipeline.gui.dm_time_plot "_output_0834/Cleaned_B0834p06_A141010_032001.jds.ucd.dmt" 12.872
 
-python -m dspz_pipeline.gui.dm_time_plot "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd.dmt" 4.8471
+python -m dspz_pipeline.gui.dm_time_plot "_output_1133/Cleaned_B1133p16_C231121_032738.jds.ucd.dmt" 4.8471
 ```
 
 **What it does:**
@@ -255,9 +304,9 @@ python -m dspz_pipeline.gui.dm_time_plot "_output_1133/Cleaned_ B1133p16C231121_
 If you already calculated .dmt by the Full pipeline and want to start visual interactive analysis, you can run command:
 
 ```bash
-python -m dspz_pipeline.gui.trans_search "_output_0834/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt" 12.872
+python -m dspz_pipeline.gui.trans_search "_output_0834/Cleaned_PSRB0834p06_A141010_032001.jds.ucd.dmt" 12.872
 
-python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_ B1133p16C231121_032738.jds.ucd.dmt" 4.8471
+python -m dspz_pipeline.gui.trans_search "_output_1133/Cleaned_B1133p16_C231121_032738.jds.ucd.dmt" 4.8471
 ```
 
 **Controls:**
@@ -291,7 +340,7 @@ at the PNG's resolution, not the screen's.
 #### Individual pulse viewer (we do not run it separately)
 
 ```bash
-python -m dspz_pipeline.gui.show_pulse "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.872 --ns 32768
+python -m dspz_pipeline.gui.show_pulse "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd" 12.872 --ns 32768
 ```
 
 **Controls:**
@@ -302,7 +351,7 @@ python -m dspz_pipeline.gui.show_pulse "_output/Cleaned_ PSRB0834p06A141010_0320
 #### Repeating pulse FFT analysis  (we do not run it separately)
 
 ```bash
-python -m dspz_pipeline.gui.repeating_analysis "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd.dmt" 12.872
+python -m dspz_pipeline.gui.repeating_analysis "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd.dmt" 12.872
 ```
 
 ### Running the full pipeline end-to-end
@@ -314,7 +363,7 @@ To run both stages sequentially from raw data to final analysis:
 python -m dspz_pipeline.process_survey --indir _data --files A141010_032001.jds A141010_032843.jds --dm 12.872 --label "PSRB0834p06" --outdir _output --no-gui
 
 # Individual Search run IndSearch dedispersion on the .ucd output
-python -m dspz_pipeline.indsearch_main "_output/Cleaned_ PSRB0834p06A141010_032001.jds.ucd" 12.872
+python -m dspz_pipeline.indsearch_main "_output/Cleaned_PSRB0834p06_A141010_032001.jds.ucd" 12.872
 ```
 
 ## Command-Line Arguments Reference
@@ -499,9 +548,15 @@ if no display is available.
 
 **Full pipeline:** RFI cleaning takes ~6 s of CPU per frame, but frames are
 cleaned in parallel (`--workers`), so two 2 GB files (128 frames) take ~3 min
-on 8 workers plus ~30 s for dedispersion. If the machine has few cores or
-little RAM (each worker needs ~250 MB; dedispersion holds the whole `.ucd`,
-~2 GB, in memory), lower `--workers`.
+on 8 workers plus ~30 s for dedispersion. If the run is much slower than that,
+check the number of workers printed at the start (`RFI cleaning with N worker
+process(es)`), make sure the machine is not swapping, and see *Parallel
+cleaning: the `--workers` option* above for how to pick a value that fits
+your CPU and RAM.
+
+**Run fails with `MemoryError` or the machine becomes unresponsive:** too many
+workers for the available RAM. Re-run with a smaller `--workers` (`1` always
+works), see the memory notes in the `--workers` section.
 
 **Individual Search:** IndSearch processes 51 DM steps (by default) x 8 subbands, reading all frames for each combination. Runtime depends on file size and disk speed.
 
